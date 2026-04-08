@@ -1,0 +1,36 @@
+---
+description: Project identity, purpose, and core technology stack for LDCPortfolio
+alwaysApply: true
+---
+
+# LDCPortfolio Project Rule
+
+This repository is a personal portfolio web application focused on an interactive and modern user experience.
+
+## Project Purpose
+
+- Present personal profile content in structured sections (hero, about, skills, projects, contact, footer).
+- Deliver a polished front-end experience with animation, theme switching, and bilingual content.
+- Keep implementation simple and maintainable for iterative UI updates.
+
+## Core Technology Stack
+
+- Frontend: React 19 + TypeScript.
+- Build tool: Vite 7.
+- Styling: Tailwind CSS 3 with utility-first styling and custom CSS variables.
+- UI primitives: Radix UI + shadcn-style component structure in `src/components/ui`.
+- Animation: Framer Motion.
+- Internationalization: i18next + react-i18next with English and Vietnamese locales.
+
+## Working Conventions
+
+- Treat this as a frontend-only static app unless the user explicitly asks to add backend services.
+- Prefer updates inside existing section/component/context structure before introducing new architecture.
+- Reuse existing UI components in `src/components/ui` instead of rebuilding primitives.
+- Keep user-facing text translatable and synchronized across locale files.
+
+## Related
+
+- **Command**: `.cursor/commands/create-config-for-this-project.md` — command that generates project-specific configuration.
+- **Skill**: `.cursor/skills/create-config-for-this-project/SKILL.md` — workflow used to generate these rules.
+- **Base Rule**: `.cursor/rules/global-rules.mdc` — global standards extended by this project rule.

@@ -1,0 +1,160 @@
+{
+  "nav": {
+    "home": "Home",
+    "about": "About",
+    "skills": "Skills",
+    "projects": "Projects",
+    "contact": "Contact"
+  },
+  "hero": {
+    "greeting": "Hello, I'm",
+    "name": "Ly Dai Cuong",
+    "title": "Fresher .NET Developer",
+    "description": "Passionate about building scalable applications and creating impactful digital experiences. Always eager to learn and grow in a professional environment.",
+    "cta": {
+      "download": "Download CV",
+      "projects": "View Projects"
+    },
+    "typing": [
+      "Full-Stack Developer",
+      "Problem Solver",
+      "Continuous Learner",
+      "Team Player"
+    ]
+  },
+  "about": {
+    "title": "About Me",
+    "subtitle": "Get to know me better",
+    "description": "I am a motivated Fresher .NET Developer with a strong foundation in software engineering. Currently pursuing my Bachelor's degree at Ton Duc Thang University with a GPA of 8.14/10.",
+    "info": {
+      "name": "Ly Dai Cuong",
+      "birth": "January 1, 2003",
+      "email": "lydaicuong784@gmail.com",
+      "phone": "0367265803",
+      "address": "124/17 Cong Hoa Street, Ward 4, Tan Binh District, HCMC",
+      "github": "github.com/daicuong11",
+      "language": "English (Aptis Esol B1)"
+    },
+    "education": {
+      "title": "Education",
+      "university": "Ton Duc Thang University",
+      "degree": "Bachelor of Software Engineering",
+      "gpa": "GPA: 8.14/10",
+      "period": "2021 - 2025"
+    },
+    "experience": {
+      "title": "Experience",
+      "company": "HQSOFT Company Limited",
+      "position": ".NET Developer",
+      "period": "March 2025 - November 2025",
+      "projects": [
+        {
+          "name": "Ajinomoto VNTT - eSales DMS",
+          "desc": "Enterprise DMS solution for optimizing distribution and sales efficiency"
+        },
+        {
+          "name": "Sabeco AMS",
+          "desc": "Distribution management and sales force automation system"
+        }
+      ]
+    }
+  },
+  "skills": {
+    "title": "Skills & Expertise",
+    "subtitle": "Technologies I work with",
+    "categories": {
+      "frontend": "Frontend Development",
+      "backend": "Backend Development",
+      "database": "Database",
+      "tools": "Tools & Others"
+    },
+    "frontend": [
+      { "name": "HTML/CSS/JavaScript", "level": 90 },
+      { "name": "React.js / TypeScript", "level": 85 },
+      { "name": "Tailwind CSS", "level": 88 },
+      { "name": "TanStack Query", "level": 80 }
+    ],
+    "backend": [
+      { "name": ".NET Core / ASP.NET Core", "level": 88 },
+      { "name": "C#", "level": 90 },
+      { "name": "Java", "level": 75 },
+      { "name": "Express.js", "level": 70 },
+      { "name": "ABP.IO Framework", "level": 82 }
+    ],
+    "database": [
+      { "name": "MS SQL Server", "level": 85 },
+      { "name": "PostgreSQL", "level": 80 },
+      { "name": "MongoDB", "level": 75 },
+      { "name": "MySQL", "level": 78 }
+    ],
+    "tools": [
+      { "name": "Git / GitHub", "level": 88 },
+      { "name": "Entity Framework", "level": 85 },
+      { "name": "Cloudinary", "level": 75 },
+      { "name": "OOP Principles", "level": 90 }
+    ]
+  },
+  "projects": {
+    "title": "Featured Projects",
+    "subtitle": "Some of my recent work",
+    "viewDemo": "Live Demo",
+    "viewCode": "Source Code",
+    "items": [
+      {
+        "title": "Ajinomoto VNTT - eSales DMS",
+        "description": "Enterprise DMS project built on HQSOFT's Xspire Business Platform. Helps optimize distribution, improve sales efficiency, and monitor business operations effectively.",
+        "tech": ["ABP Framework", ".NET Core 9", "Blazor", "PostgreSQL", "DevExpress"],
+        "category": "Enterprise"
+      },
+      {
+        "title": "Sabeco AMS",
+        "description": "Enterprise software for distribution management and sales force automation, built for business process optimization.",
+        "tech": ["ASP.NET MVC", "Ext.NET", "SQL Server", "HQ eSky Framework"],
+        "category": "Enterprise"
+      },
+      {
+        "title": "E-Commerce Platform",
+        "description": "Full-stack e-commerce application with modern UI, shopping cart, and payment integration.",
+        "tech": ["React.js", "Node.js", "MongoDB", "Express.js", "Tailwind CSS"],
+        "category": "Web App"
+      },
+      {
+        "title": "Task Management System",
+        "description": "Collaborative task management tool with real-time updates and team collaboration features.",
+        "tech": ["React TypeScript", ".NET Core", "SignalR", "PostgreSQL"],
+        "category": "Web App"
+      }
+    ]
+  },
+  "contact": {
+    "title": "Get In Touch",
+    "subtitle": "Let's work together",
+    "description": "I'm always open to discussing new projects, creative ideas or opportunities to be part of your visions.",
+    "form": {
+      "name": "Your Name",
+      "email": "Your Email",
+      "subject": "Subject",
+      "message": "Your Message",
+      "send": "Send Message",
+      "sending": "Sending...",
+      "success": "Message sent successfully!",
+      "error": "Failed to send message. Please try again."
+    },
+    "info": {
+      "email": "Email",
+      "phone": "Phone",
+      "location": "Location",
+      "social": "Follow Me"
+    }
+  },
+  "footer": {
+    "copyright": "© 2025 Ly Dai Cuong. All rights reserved.",
+    "madeWith": "Made with",
+    "and": "and"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "neon": "Neon"
+  }
+}

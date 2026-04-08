@@ -1,0 +1,47 @@
+---
+description: Architecture and implementation patterns for LDCPortfolio frontend code
+alwaysApply: true
+---
+
+# LDCPortfolio Architecture Patterns Rule
+
+Apply these patterns when adding or modifying functionality.
+
+## Current Architecture Shape
+
+- Single-page React app composed from section components in `src/sections`.
+- App-level providers in `src/context` handle cross-section state (theme and music).
+- Reusable design-system style primitives live in `src/components/ui`.
+- Feature behavior is extracted to custom hooks in `src/hooks` when reused.
+
+## Component and State Patterns
+
+- Keep section components focused on presentation and local interaction.
+- Put cross-cutting, multi-component state in context providers rather than prop drilling.
+- Use hooks for shared behavior; avoid duplicating effect logic across sections.
+- Keep provider APIs small, typed, and explicit (for example `toggleTheme`, `playTrack`).
+
+## Styling and UI Patterns
+
+- Use Tailwind utility classes and existing CSS variables for theme-safe styling.
+- Prefer composing existing UI primitives before creating new base components.
+- Preserve responsive behavior and animation quality when editing layouts.
+
+## i18n and Content Patterns
+
+- Any new user-facing copy should be added to locale dictionaries (`en.json`, `vi.json`).
+- Keep translation keys semantic and grouped by feature/section.
+- Avoid embedding long hardcoded copy directly in components when localization is expected.
+
+## Change Placement Rules
+
+- New page block: add under `src/sections` and compose in `src/App.tsx`.
+- New reusable UI primitive: add under `src/components/ui`.
+- New global app behavior: add/update a provider in `src/context`.
+- New shared utility: place in `src/lib` or `src/hooks` based on responsibility.
+
+## Related
+
+- **Command**: `.cursor/commands/create-config-for-this-project.md` — command that generates project-specific configuration.
+- **Skill**: `.cursor/skills/create-config-for-this-project/SKILL.md` — workflow used to generate these rules.
+- **Base Rule**: `.cursor/rules/project.mdc` — project purpose and stack context that this architecture rule builds on.

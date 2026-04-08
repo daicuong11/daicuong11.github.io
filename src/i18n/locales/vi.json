@@ -1,0 +1,160 @@
+{
+  "nav": {
+    "home": "Trang chủ",
+    "about": "Giới thiệu",
+    "skills": "Kỹ năng",
+    "projects": "Dự án",
+    "contact": "Liên hệ"
+  },
+  "hero": {
+    "greeting": "Xin chào, tôi là",
+    "name": "Lý Đại Cương",
+    "title": "Fresher .NET Developer",
+    "description": "Đam mê xây dựng các ứng dụng có khả năng mở rộng và tạo ra những trải nghiệm kỹ thuật số có tác động. Luôn sẵn sàng học hỏi và phát triển trong môi trường chuyên nghiệp.",
+    "cta": {
+      "download": "Tải CV",
+      "projects": "Xem Dự Án"
+    },
+    "typing": [
+      "Full-Stack Developer",
+      "NgườI Giải Quyết Vấn Đề",
+      "NgườI Học Liên Tục",
+      "Thành Viên Nhóm"
+    ]
+  },
+  "about": {
+    "title": "Về Tôi",
+    "subtitle": "Tìm hiểu thêm về tôi",
+    "description": "Tôi là một Fresher .NET Developer nhiệt huyết với nền tảng vững chắc về kỹ thuật phần mềm. Hiện đang theo học Cử nhân Kỹ thuật Phần mềm tại Đại học Tôn Đức Thắng với GPA 8.14/10.",
+    "info": {
+      "name": "Lý Đại Cương",
+      "birth": "01/01/2003",
+      "email": "lydaicuong784@gmail.com",
+      "phone": "0367265803",
+      "address": "124/17 Cộng Hòa, Phường 4, Quận Tân Bình, TP.HCM",
+      "github": "github.com/daicuong11",
+      "language": "Tiếng Anh (Aptis Esol B1)"
+    },
+    "education": {
+      "title": "Học Vấn",
+      "university": "Đại học Tôn Đức Thắng",
+      "degree": "Cử nhân Kỹ thuật Phần mềm",
+      "gpa": "GPA: 8.14/10",
+      "period": "2021 - 2025"
+    },
+    "experience": {
+      "title": "Kinh Nghiệm",
+      "company": "Công ty TNHH HQSOFT",
+      "position": ".NET Developer",
+      "period": "Tháng 3/2025 - Tháng 11/2025",
+      "projects": [
+        {
+          "name": "Ajinomoto VNTT - eSales DMS",
+          "desc": "Giải pháp DMS doanh nghiệp để tối ưu hóa phân phối và hiệu quả bán hàng"
+        },
+        {
+          "name": "Sabeco AMS",
+          "desc": "Hệ thống quản lý phân phối và tự động hóa lực lượng bán hàng"
+        }
+      ]
+    }
+  },
+  "skills": {
+    "title": "Kỹ Năng & Chuyên Môn",
+    "subtitle": "Công nghệ tôi sử dụng",
+    "categories": {
+      "frontend": "Frontend Development",
+      "backend": "Backend Development",
+      "database": "Cơ sở dữ liệu",
+      "tools": "Công cụ & Khác"
+    },
+    "frontend": [
+      { "name": "HTML/CSS/JavaScript", "level": 90 },
+      { "name": "React.js / TypeScript", "level": 85 },
+      { "name": "Tailwind CSS", "level": 88 },
+      { "name": "TanStack Query", "level": 80 }
+    ],
+    "backend": [
+      { "name": ".NET Core / ASP.NET Core", "level": 88 },
+      { "name": "C#", "level": 90 },
+      { "name": "Java", "level": 75 },
+      { "name": "Express.js", "level": 70 },
+      { "name": "ABP.IO Framework", "level": 82 }
+    ],
+    "database": [
+      { "name": "MS SQL Server", "level": 85 },
+      { "name": "PostgreSQL", "level": 80 },
+      { "name": "MongoDB", "level": 75 },
+      { "name": "MySQL", "level": 78 }
+    ],
+    "tools": [
+      { "name": "Git / GitHub", "level": 88 },
+      { "name": "Entity Framework", "level": 85 },
+      { "name": "Cloudinary", "level": 75 },
+      { "name": "OOP Principles", "level": 90 }
+    ]
+  },
+  "projects": {
+    "title": "Dự Án Nổi Bật",
+    "subtitle": "Một số dự án gần đây của tôi",
+    "viewDemo": "Xem Demo",
+    "viewCode": "Mã Nguồn",
+    "items": [
+      {
+        "title": "Ajinomoto VNTT - eSales DMS",
+        "description": "Dự án DMS doanh nghiệp được xây dựng trên nền tảng Xspire Business của HQSOFT. Giúp tối ưu hóa phân phối, cải thiện hiệu quả bán hàng và giám sát hoạt động kinh doanh.",
+        "tech": ["ABP Framework", ".NET Core 9", "Blazor", "PostgreSQL", "DevExpress"],
+        "category": "Doanh nghiệp"
+      },
+      {
+        "title": "Sabeco AMS",
+        "description": "Phần mềm doanh nghiệp cho quản lý phân phối và tự động hóa lực lượng bán hàng, được xây dựng để tối ưu hóa quy trình kinh doanh.",
+        "tech": ["ASP.NET MVC", "Ext.NET", "SQL Server", "HQ eSky Framework"],
+        "category": "Doanh nghiệp"
+      },
+      {
+        "title": "Nền tảng Thương mại Điện tử",
+        "description": "Ứng dụng thương mại điện tử full-stack với giao diện hiện đại, giỏ hàng và tích hợp thanh toán.",
+        "tech": ["React.js", "Node.js", "MongoDB", "Express.js", "Tailwind CSS"],
+        "category": "Web App"
+      },
+      {
+        "title": "Hệ thống Quản lý Công việc",
+        "description": "Công cụ quản lý công việc cộng tác với cập nhật real-time và tính năng làm việc nhóm.",
+        "tech": ["React TypeScript", ".NET Core", "SignalR", "PostgreSQL"],
+        "category": "Web App"
+      }
+    ]
+  },
+  "contact": {
+    "title": "Liên Hệ",
+    "subtitle": "Hãy cùng hợp tác",
+    "description": "Tôi luôn sẵn sàng thảo luận về các dự án mới, ý tưởng sáng tạo hoặc cơ hội để trở thành một phần trong tầm nhìn của bạn.",
+    "form": {
+      "name": "Họ và Tên",
+      "email": "Email",
+      "subject": "Tiêu đề",
+      "message": "Nội dung",
+      "send": "Gửi Tin Nhắn",
+      "sending": "Đang gửi...",
+      "success": "Gửi tin nhắn thành công!",
+      "error": "Gửi tin nhắn thất bại. Vui lòng thử lại."
+    },
+    "info": {
+      "email": "Email",
+      "phone": "Điện thoại",
+      "location": "Địa chỉ",
+      "social": "Theo dõi tôi"
+    }
+  },
+  "footer": {
+    "copyright": "© 2025 Lý Đại Cương. Đã đăng ký bản quyền.",
+    "madeWith": "Được tạo bằng",
+    "and": "và"
+  },
+  "theme": {
+    "light": "Sáng",
+    "dark": "Tối",
+    "neon": "Neon"
+  }
+}

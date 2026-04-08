@@ -1,0 +1,42 @@
+---
+description: Source map and navigation guide for LDCPortfolio directories and key files
+alwaysApply: true
+---
+
+# LDCPortfolio Sources Base Rule
+
+Use this map to quickly locate the correct place for changes.
+
+## Key Directories
+
+- `src/main.tsx`: application entry point and React root render.
+- `src/App.tsx`: top-level composition (providers, loading flow, section order).
+- `src/sections`: page-level content sections (navigation, hero, about, skills, projects, contact, footer).
+- `src/components`: reusable feature components (for example `MusicPlayer`).
+- `src/components/ui`: shared UI primitives built on Radix/shadcn patterns.
+- `src/context`: cross-cutting state providers (`ThemeContext`, `MusicContext`).
+- `src/hooks`: custom hooks for behavior and responsive logic.
+- `src/i18n`: i18n initialization and locale dictionaries.
+- `src/lib`: utilities shared across components.
+
+## Configuration Files
+
+- `vite.config.ts`: Vite setup, React plugin, and `@` alias to `src`.
+- `tailwind.config.js`: design tokens, theme extension, and Tailwind plugin setup.
+- `postcss.config.js`: CSS processing pipeline.
+- `eslint.config.js`: linting rules.
+- `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`: TypeScript config split.
+- `components.json`: UI component generator/config metadata.
+
+## Navigation Guidance for Agents
+
+- For content/layout changes, start in `src/sections` and `src/App.tsx`.
+- For theming, cursor behavior, audio state, or app-level toggles, inspect `src/context`.
+- For UI consistency, prefer using or extending `src/components/ui` primitives.
+- For text changes, update locale files in `src/i18n/locales` rather than hardcoding.
+
+## Related
+
+- **Command**: `.cursor/commands/create-config-for-this-project.md` — command that generates project-specific configuration.
+- **Skill**: `.cursor/skills/create-config-for-this-project/SKILL.md` — workflow used to generate these rules.
+- **Guideline**: `.cursor/rules/authoring-guidelines.mdc` — format and linking standards for config artifacts.

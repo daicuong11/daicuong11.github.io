@@ -1,0 +1,51 @@
+---
+description: Global rules for all projects — code style, workflow, communication, and safety
+alwaysApply: true
+---
+
+# Global Rules
+
+Apply these rules across all systems and projects unless overridden by project-specific rules.
+
+## Code and Implementation
+
+- Prefer clear, readable code over cleverness. Use consistent naming and structure.
+- Keep functions and modules focused; avoid doing multiple unrelated things in one place.
+- Handle errors explicitly: log or return meaningful messages; do not swallow exceptions.
+- Do not commit secrets, API keys, or credentials; use environment variables or secure config.
+
+## Workflow
+
+- Confirm requirements with the user when the request is ambiguous or has multiple valid interpretations.
+- Prefer small, verifiable steps when making large changes; summarize what was done after each significant change.
+- When adding a feature, consider documentation and tests; update docs when behavior or APIs change.
+
+## Communication
+
+- Answer in the language the user uses (e.g. Vietnamese or English) unless they ask otherwise.
+- When the user runs **/task**, all responses during that task (plans, questions, summaries, completion report) must be in **Vietnamese** as specified in the task command and skill.
+- For technical answers, use structured format (lists, code blocks, headings) when it improves clarity.
+- When proposing changes, state what will change and why; offer to apply or revert if the user prefers.
+
+## Safety and Quality
+
+- Do not run destructive or irreversible commands (e.g. `rm -rf`, force push, drop database) without explicit user confirmation.
+- Preserve existing behavior unless the task explicitly asks to change it; avoid unnecessary refactors in unrelated code.
+- When fixing bugs, address the root cause when possible and document the fix briefly.
+
+## Examples
+
+**Error handling (good):**
+```text
+Try operation → on failure log/return clear message → let caller decide retry or report.
+```
+
+**Requirement clarification (good):**
+```text
+User: "Add validation." → Agent: "Should validation block submit, show inline errors, or both? Which fields?"
+```
+
+**Avoid:**
+- Empty catch blocks or silent failures.
+- Making broad refactors when the task is a small, local change.
+- Running `git push --force` or similar without the user confirming.
