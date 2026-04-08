@@ -1,0 +1,5 @@
+# https://lydaicuong.me
+User-agent: *
+Allow: /
+
+Sitemap: https://lydaicuong.me/sitemap.xml
