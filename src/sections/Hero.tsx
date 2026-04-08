@@ -6,7 +6,7 @@ import { Download, ArrowRight, Github, Linkedin, Mail } from 'lucide-react';
 export default function Hero() {
   const { t } = useTranslation();
   const typingTexts = t('hero.typing', { returnObjects: true }) as string[];
-  const typedText = useTypingEffect(typingTexts, 100, 50);
+  const typedText = useTypingEffect(typingTexts, 150, 75);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -173,12 +173,14 @@ export default function Hero() {
               <motion.a
                 href="/LyDaiCuong_CV_En.pdf"
                 download
-                className="btn-primary-gradient flex items-center gap-2 text-sm sm:text-base px-5 sm:px-8 py-2.5 sm:py-3"
+                className="btn-primary-gradient inline-flex items-center justify-center gap-2 text-sm sm:text-base px-5 sm:px-8 py-2.5 sm:py-3"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <Download className="w-4 h-4 sm:w-5 sm:h-5" />
-                {t('hero.cta.download')}
+                <span className="relative z-[1] inline-flex items-center gap-2">
+                  <Download className="w-4 h-4 sm:w-5 sm:h-5" />
+                  {t('hero.cta.download')}
+                </span>
               </motion.a>
               <motion.button
                 onClick={() => document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' })}

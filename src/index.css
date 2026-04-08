@@ -6,7 +6,8 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    /* Nền nhạt hơn một bậc so với card để card/popover nổi bật */
+    --background: 220 14% 96%;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
@@ -28,8 +29,9 @@
     --radius: 0.625rem;
     
     --hero-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --glass-bg: rgba(255, 255, 255, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.3);
+    /* Kính sáng + viền tối nhẹ: tách rõ khỏi nền xám nhạt */
+    --glass-bg: rgba(255, 255, 255, 0.92);
+    --glass-border: rgba(15, 23, 42, 0.1);
     --neon-glow: 0 0 20px rgba(102, 126, 234, 0.5);
     --tech-accent: #667eea;
     
@@ -99,10 +101,10 @@
     --neon-glow: 0 0 40px rgba(0, 255, 255, 0.8), 0 0 80px rgba(255, 0, 255, 0.4);
     --tech-accent: #00ffff;
     
-    /* Button gradient colors for neon theme */
-    --btn-gradient-start: #00ffff;
-    --btn-gradient-end: #ff00ff;
-    --btn-gradient-mid: #ffff00;
+    /* Gradient nút CTA: màu đậm (teal/violet/fuchsia) để chữ trắng tương phản tốt, vẫn giữ vibe cyber */
+    --btn-gradient-start: #0d9488;
+    --btn-gradient-mid: #6d28d9;
+    --btn-gradient-end: #a21caf;
   }
 }
 
@@ -175,6 +177,9 @@
     @apply relative overflow-hidden rounded-xl;
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
+    box-shadow:
+      0 1px 2px hsl(220 10% 10% / 0.04),
+      0 4px 12px hsl(220 10% 10% / 0.06);
     transition: all 0.3s ease;
   }
   
@@ -211,6 +216,7 @@
     content: '';
     position: absolute;
     inset: 0;
+    z-index: 0;
     background: linear-gradient(135deg, var(--btn-gradient-end) 0%, var(--btn-gradient-mid) 50%, var(--btn-gradient-start) 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
@@ -225,9 +231,23 @@
     opacity: 1;
   }
   
+  /* Chỉ áp dụng cho phần tử con; chữ thuần (text node) không có z-index — cần bọc span trong JSX */
   .btn-primary-gradient > * {
     position: relative;
     z-index: 1;
+  }
+
+  /* Neon: tránh chữ trắng bị nuốt trên vùng gradient sáng; viền glow vừa phải khi hover */
+  .neon .btn-primary-gradient {
+    color: #f8fafc;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.75), 0 0 12px rgb(0 0 0 / 0.35);
+  }
+
+  .neon .btn-primary-gradient:hover {
+    box-shadow:
+      0 8px 25px rgb(0 0 0 / 0.45),
+      0 0 24px rgb(13 148 136 / 0.45),
+      0 0 40px rgb(109 40 217 / 0.25);
   }
   
   .btn-primary {
@@ -270,6 +290,11 @@
   
   .project-card:hover .project-image-scroll {
     transform: translateY(calc(-50% + 100px));
+  }
+
+  /* Project card: tắt shimmer ::before của .tech-card — tránh lớp sáng quét lên vùng ảnh khi hover */
+  .project-card.tech-card::before {
+    display: none;
   }
   
   /* Tech stack grid for mobile */
@@ -506,8 +531,13 @@ input[type="range"]::-moz-range-thumb:hover {
 .music-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: hsl(var(--foreground) / 0.12);
   backdrop-filter: blur(12px);
+}
+
+html.dark .music-modal-backdrop,
+html.neon .music-modal-backdrop {
+  background: hsl(var(--foreground) / 0.45);
 }
 
 .music-modal-content {
@@ -517,7 +547,50 @@ input[type="range"]::-moz-range-thumb:hover {
   max-height: 90vh;
   overflow: hidden;
   border-radius: 24px;
-  background: linear-gradient(145deg, rgba(30,30,46,0.98), rgba(20,20,35,0.99));
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 25px 80px rgba(0,0,0,0.6);
+  color: hsl(var(--foreground));
+  background: linear-gradient(
+    145deg,
+    hsl(var(--card) / 0.97),
+    hsl(var(--muted) / 0.92)
+  );
+  border: 1px solid hsl(var(--border) / 0.85);
+  box-shadow:
+    0 25px 80px hsl(var(--foreground) / 0.12),
+    0 0 0 1px hsl(var(--border) / 0.35) inset;
+  display: flex;
+  flex-direction: column;
+}
+
+html.dark .music-modal-content,
+html.neon .music-modal-content {
+  background: linear-gradient(
+    145deg,
+    hsl(var(--card) / 0.98),
+    hsl(240 12% 8% / 0.99)
+  );
+  border: 1px solid hsl(var(--border) / 0.5);
+  box-shadow: 0 25px 80px hsl(0 0% 0% / 0.55);
+}
+
+/* Playlist panel: thin themed scrollbar */
+.music-playlist-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+}
+
+.music-playlist-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.music-playlist-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.music-playlist-scroll::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.35);
+  border-radius: 9999px;
+}
+
+.music-playlist-scroll::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.55);
 }

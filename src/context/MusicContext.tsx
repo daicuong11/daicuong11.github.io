@@ -1,21 +1,17 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import { musicPlaylist as playlist, type MusicTrack } from '@/data/musicPlaylist';
 
-interface Track {
-  id: string;
-  title: string;
-  artist: string;
-  cover: string;
-  url: string;
-  duration: number;
-}
+export const PORTFOLIO_READY_EVENT = 'portfolio:ready';
 
 interface MusicContextType {
   isPlaying: boolean;
-  currentTrack: Track;
+  currentTrack: MusicTrack;
   currentTime: number;
   duration: number;
   volume: number;
-  playlist: Track[];
+  playlist: MusicTrack[];
+  /** Duration thật (giây) theo id bài, từ metadata MP3; thiếu key thì UI fallback `track.duration` */
+  trackMetaDurations: Record<string, number>;
   isPlayerOpen: boolean;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -24,376 +20,669 @@ interface MusicContextType {
   seekTo: (time: number) => void;
   togglePlayer: () => void;
   playTrack: (trackId: string) => void;
+  requiresUserGesture: boolean;
+  resumeAudio: () => Promise<void>;
 }
 
-// Playlist with royalty-free music
-const playlist: Track[] = [
-  {
-    id: '1',
-    title: 'Weightless',
-    artist: 'Marconi Union',
-    cover: 'https://images.unsplash.com/photo-1516280440614-6697288d5d38?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-    duration: 480,
-  },
-  {
-    id: '2',
-    title: 'Daydreaming',
-    artist: 'Lee',
-    cover: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-    duration: 360,
-  },
-  {
-    id: '3',
-    title: 'A Walk',
-    artist: 'Tycho',
-    cover: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-    duration: 420,
-  },
-  {
-    id: '4',
-    title: 'Awake',
-    artist: 'Tycho',
-    cover: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
-    duration: 380,
-  },
-  {
-    id: '5',
-    title: 'Time',
-    artist: 'Hans Zimmer',
-    cover: 'https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
-    duration: 300,
-  },
-  {
-    id: '6',
-    title: 'Night Owl',
-    artist: 'Galimatias',
-    cover: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3',
-    duration: 340,
-  },
-  {
-    id: '7',
-    title: 'Intro',
-    artist: 'The xx',
-    cover: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3',
-    duration: 280,
-  },
-  {
-    id: '8',
-    title: 'Cold Air',
-    artist: 'Dario Marianelli',
-    cover: 'https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3',
-    duration: 320,
-  },
-  {
-    id: '9',
-    title: 'Sunset Lover',
-    artist: 'Petit Biscuit',
-    cover: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3',
-    duration: 400,
-  },
-  {
-    id: '10',
-    title: 'Luv(sic) Part 3',
-    artist: 'Nujabes',
-    cover: 'https://images.unsplash.com/photo-1496293455970-f8581aae0e3c?w=400&h=400&fit=crop',
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-17.mp3',
-    duration: 360,
-  },
-];
-
-const FAVORITE_TRACK_INDEX = 0;
+/** Bài mặc định khi mở app (id trong playlist, ví dụ '3' → index 2) */
+const FAVORITE_TRACK_INDEX = 2;
+/** Attack / release dùng exponential (ADSR-lite); crossfade giữ độ dài mượt */
+const FADE_IN_MS = 1400;
+const FADE_OUT_MS = 900;
+const CROSSFADE_MS = 2000;
+const VOLUME_RAMP_MS = 140;
+const GAIN_EPS = 0.0001;
 
 const MusicContext = createContext<MusicContextType | undefined>(undefined);
+
+type DeckId = 'A' | 'B';
+
+type Deck = {
+  id: DeckId;
+  audio: HTMLAudioElement;
+  sourceNode: MediaElementAudioSourceNode | null;
+  gainNode: GainNode | null;
+  trackIndex: number;
+  prepared: boolean;
+  /** Tăng mỗi lần gán src mới; bỏ qua canplay của load cũ */
+  loadGeneration: number;
+};
+
+function trackUrlMatchesAudio(audio: HTMLAudioElement, url: string): boolean {
+  try {
+    const resolved = new URL(url, window.location.href).href;
+    return audio.src === resolved || audio.currentSrc === resolved || audio.src.endsWith(url);
+  } catch {
+    return audio.src.includes(url);
+  }
+}
+
+function waitForCanPlay(audio: HTMLAudioElement): Promise<void> {
+  if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const onCanPlay = () => {
+      audio.removeEventListener('error', onError);
+      resolve();
+    };
+    const onError = () => {
+      audio.removeEventListener('canplay', onCanPlay);
+      reject(new Error('Audio load failed'));
+    };
+    audio.addEventListener('canplay', onCanPlay, { once: true });
+    audio.addEventListener('error', onError, { once: true });
+  });
+}
+
+/**
+ * Gán src và đợi media sẵn sàng trước khi play — tránh play() bắt buffer bài cũ
+ * (đặc biệt khi element đã nối MediaElementSource).
+ */
+async function loadTrackOnDeck(deck: Deck, trackIndex: number): Promise<void> {
+  const url = playlist[trackIndex].url;
+  if (deck.trackIndex === trackIndex && trackUrlMatchesAudio(deck.audio, url)) {
+    return;
+  }
+
+  deck.loadGeneration += 1;
+  const loadGen = deck.loadGeneration;
+  const audio = deck.audio;
+  audio.src = url;
+  audio.preload = 'auto';
+  audio.load();
+
+  try {
+    await waitForCanPlay(audio);
+  } catch {
+    if (deck.loadGeneration === loadGen) {
+      deck.loadGeneration += 1;
+    }
+    throw new Error('Audio load failed');
+  }
+
+  if (deck.loadGeneration !== loadGen) {
+    return;
+  }
+  deck.trackIndex = trackIndex;
+}
+
+function mergeMetaDuration(
+  prev: Record<string, number>,
+  trackId: string,
+  seconds: number,
+): Record<string, number> {
+  if (!Number.isFinite(seconds) || seconds <= 0) return prev;
+  if (prev[trackId] === seconds) return prev;
+  return { ...prev, [trackId]: seconds };
+}
 
 export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(FAVORITE_TRACK_INDEX);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(playlist[FAVORITE_TRACK_INDEX].duration);
-  const [volume, setVolumeState] = useState(0.6);
+  const [volume, setVolumeState] = useState(0.8);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
+  const [requiresUserGesture, setRequiresUserGesture] = useState(false);
+  const [trackMetaDurations, setTrackMetaDurations] = useState<Record<string, number>>({});
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const fadeRafRef = useRef<number | null>(null);
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+  const trackMetaDurationsRef = useRef<Record<string, number>>({});
+  trackMetaDurationsRef.current = trackMetaDurations;
+
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const deckARef = useRef<Deck | null>(null);
+  const deckBRef = useRef<Deck | null>(null);
+  const activeDeckIdRef = useRef<DeckId>('A');
+
   const isTransitioningRef = useRef(false);
+  const transitionGenRef = useRef(0);
+  const transitionPauseTimerRef = useRef<number | null>(null);
+  const transitionFinishTimerRef = useRef<number | null>(null);
+
+  const currentTrackIndexRef = useRef(FAVORITE_TRACK_INDEX);
+  const isPlayingRef = useRef(false);
+  currentTrackIndexRef.current = currentTrackIndex;
+  isPlayingRef.current = isPlaying;
+
+  const restoreVolumeRef = useRef(0.8);
+  const autoplaySuccessRef = useRef(false);
+  const autoplayMicrotaskQueuedRef = useRef(false);
 
   const currentTrack = playlist[currentTrackIndex];
 
-  // Initialize audio element
-  useEffect(() => {
-    const audio = new Audio(currentTrack.url);
-    audio.volume = 0;
-    audio.loop = false;
-    audioRef.current = audio;
+  const getDeck = useCallback((id: DeckId) => (id === 'A' ? deckARef.current : deckBRef.current), []);
 
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-    };
+  const getActiveDeck = useCallback(() => getDeck(activeDeckIdRef.current), [getDeck]);
+  const getInactiveDeck = useCallback(() => getDeck(activeDeckIdRef.current === 'A' ? 'B' : 'A'), [getDeck]);
 
-    const handleLoadedMetadata = () => {
-      if (audio.duration && !isNaN(audio.duration)) {
-        setDuration(audio.duration);
+  const getOrCreateAudioContext = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    if (!audioContextRef.current) {
+      const ctx = new window.AudioContext();
+      const master = ctx.createGain();
+      master.gain.value = volumeRef.current;
+      master.connect(ctx.destination);
+      audioContextRef.current = ctx;
+      masterGainRef.current = master;
+    }
+    return audioContextRef.current;
+  }, []);
+
+  const ensureDeckGraph = useCallback(
+    (deck: Deck) => {
+      const ctx = getOrCreateAudioContext();
+      if (!ctx || !masterGainRef.current || deck.prepared) return;
+      deck.sourceNode = ctx.createMediaElementSource(deck.audio);
+      deck.gainNode = ctx.createGain();
+      deck.gainNode.gain.value = GAIN_EPS;
+      deck.sourceNode.connect(deck.gainNode);
+      deck.gainNode.connect(masterGainRef.current);
+      deck.prepared = true;
+    },
+    [getOrCreateAudioContext],
+  );
+
+  const silenceDeckGain = useCallback((gainNode: GainNode) => {
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const g = gainNode.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(GAIN_EPS, now);
+  }, []);
+
+  /** ADSR-lite attack: exponential 0 → full (mượt hơn linear cho nhạc nền) */
+  const deckGainFadeIn = useCallback((gainNode: GainNode, durationMs: number) => {
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const g = gainNode.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(GAIN_EPS, now);
+    g.exponentialRampToValueAtTime(1, now + durationMs / 1000);
+  }, []);
+
+  /** Release: exponential về near-zero trước khi pause */
+  const deckGainFadeOut = useCallback((gainNode: GainNode, durationMs: number) => {
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const g = gainNode.gain;
+    g.cancelScheduledValues(now);
+    const cur = Math.max(g.value, GAIN_EPS);
+    g.setValueAtTime(cur, now);
+    g.exponentialRampToValueAtTime(GAIN_EPS, now + durationMs / 1000);
+  }, []);
+
+  const scheduleMasterVolume = useCallback((target: number, rampMs: number = VOLUME_RAMP_MS) => {
+    const ctx = audioContextRef.current;
+    const master = masterGainRef.current;
+    if (!ctx || !master) return;
+    const now = ctx.currentTime;
+    const g = master.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(target, now + rampMs / 1000);
+  }, []);
+
+  const clearTransitionTimers = useCallback(() => {
+    if (transitionPauseTimerRef.current != null) {
+      window.clearTimeout(transitionPauseTimerRef.current);
+      transitionPauseTimerRef.current = null;
+    }
+    if (transitionFinishTimerRef.current != null) {
+      window.clearTimeout(transitionFinishTimerRef.current);
+      transitionFinishTimerRef.current = null;
+    }
+  }, []);
+
+  const syncUiFromActiveAudio = useCallback(() => {
+    const active = getActiveDeck();
+    if (!active) return;
+    const t = active.audio.currentTime;
+    setCurrentTime(Number.isFinite(t) ? t : 0);
+    const d = active.audio.duration;
+    if (Number.isFinite(d) && d > 0) {
+      setDuration(d);
+      const tr = playlist[active.trackIndex];
+      if (tr) {
+        setTrackMetaDurations((prev) => mergeMetaDuration(prev, tr.id, d));
       }
-    };
+    }
+  }, [getActiveDeck]);
 
-    const handleEnded = () => {
-      handleNextTrack();
-    };
+  const resumeAudio = useCallback(async () => {
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+    const active = getActiveDeck();
+    if (active) ensureDeckGraph(active);
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    setRequiresUserGesture(false);
+  }, [ensureDeckGraph, getActiveDeck, getOrCreateAudioContext]);
 
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('ended', handleEnded);
+  const playDeck = useCallback(
+    async (deck: Deck) => {
+      ensureDeckGraph(deck);
+      await resumeAudio();
+      await deck.audio.play();
+    },
+    [ensureDeckGraph, resumeAudio],
+  );
 
-    // Auto-play favorite track on mount with fade in
-    const autoPlay = async () => {
+  const preloadNextOnInactive = useCallback(
+    (playingIndex: number) => {
+      const inactive = getInactiveDeck();
+      if (!inactive) return;
+      const nextIndex = (playingIndex + 1) % playlist.length;
+      if (inactive.trackIndex === nextIndex && trackUrlMatchesAudio(inactive.audio, playlist[nextIndex].url)) {
+        return;
+      }
+      void loadTrackOnDeck(inactive, nextIndex).catch(() => undefined);
+    },
+    [getInactiveDeck],
+  );
+
+  const finishTransition = useCallback(
+    (gen: number, newActiveId: DeckId, targetTrackIndex: number) => {
+      if (gen !== transitionGenRef.current) return;
+      activeDeckIdRef.current = newActiveId;
+      setCurrentTrackIndex(targetTrackIndex);
+      setCurrentTime(0);
+      setDuration(playlist[targetTrackIndex].duration);
+      isTransitioningRef.current = false;
+      preloadNextOnInactive(targetTrackIndex);
+      syncUiFromActiveAudio();
+    },
+    [preloadNextOnInactive, syncUiFromActiveAudio],
+  );
+
+  const performTransition = useCallback(
+    async (targetTrackIndex: number) => {
+      const activePre = getActiveDeck();
+      const inactivePre = getInactiveDeck();
+      if (!activePre || !inactivePre) return;
+
+      if (
+        targetTrackIndex === activePre.trackIndex &&
+        trackUrlMatchesAudio(activePre.audio, playlist[targetTrackIndex].url)
+      ) {
+        setCurrentTrackIndex(targetTrackIndex);
+        syncUiFromActiveAudio();
+        return;
+      }
+
+      if (isTransitioningRef.current) {
+        clearTransitionTimers();
+        transitionGenRef.current += 1;
+        isTransitioningRef.current = false;
+      }
+
+      const active = getActiveDeck();
+      const inactive = getInactiveDeck();
+      if (!active || !inactive) return;
+
+      clearTransitionTimers();
+      isTransitioningRef.current = true;
+      transitionGenRef.current += 1;
+      const gen = transitionGenRef.current;
+
+      const newActiveId: DeckId = activeDeckIdRef.current === 'A' ? 'B' : 'A';
+
+      await loadTrackOnDeck(inactive, targetTrackIndex);
+      if (gen !== transitionGenRef.current) {
+        return;
+      }
+
+      ensureDeckGraph(active);
+      ensureDeckGraph(inactive);
+
       try {
-        await audio.play();
-        smoothFadeIn(0.6, 1500);
-        setIsPlaying(true);
-      } catch (error) {
-        console.log('Auto-play blocked by browser policy');
+        inactive.audio.currentTime = 0;
+        await playDeck(inactive);
+
+        if (!active.gainNode || !inactive.gainNode) {
+          throw new Error('Gain graph not ready');
+        }
+
+        deckGainFadeIn(inactive.gainNode, CROSSFADE_MS);
+        deckGainFadeOut(active.gainNode, CROSSFADE_MS);
+
+        transitionPauseTimerRef.current = window.setTimeout(() => {
+          if (gen !== transitionGenRef.current) return;
+          active.audio.pause();
+          active.audio.currentTime = 0;
+          if (active.gainNode) {
+            silenceDeckGain(active.gainNode);
+          }
+        }, CROSSFADE_MS + 50);
+
+        transitionFinishTimerRef.current = window.setTimeout(() => {
+          finishTransition(gen, newActiveId, targetTrackIndex);
+        }, CROSSFADE_MS + 80);
+      } catch {
+        isTransitioningRef.current = false;
+        setRequiresUserGesture(true);
+        setIsPlaying(false);
+      }
+    },
+    [
+      clearTransitionTimers,
+      ensureDeckGraph,
+      finishTransition,
+      getActiveDeck,
+      getInactiveDeck,
+      playDeck,
+      deckGainFadeIn,
+      deckGainFadeOut,
+      silenceDeckGain,
+      syncUiFromActiveAudio],
+  );
+
+  const engineRef = useRef({
+    ensureDeckGraph,
+    playDeck,
+    silenceDeckGain,
+    deckGainFadeIn,
+    deckGainFadeOut,
+    preloadNextOnInactive,
+    syncUiFromActiveAudio,
+    clearTransitionTimers,
+    performTransition,
+  });
+  engineRef.current = {
+    ensureDeckGraph,
+    playDeck,
+    silenceDeckGain,
+    deckGainFadeIn,
+    deckGainFadeOut,
+    preloadNextOnInactive,
+    syncUiFromActiveAudio,
+    clearTransitionTimers,
+    performTransition,
+  };
+
+  useEffect(() => {
+    isTransitioningRef.current = false;
+
+    const audioA = new Audio(playlist[FAVORITE_TRACK_INDEX].url);
+    audioA.loop = false;
+    audioA.preload = 'auto';
+
+    const audioB = new Audio(playlist[(FAVORITE_TRACK_INDEX + 1) % playlist.length].url);
+    audioB.loop = false;
+    audioB.preload = 'auto';
+
+    const deckA: Deck = {
+      id: 'A',
+      audio: audioA,
+      sourceNode: null,
+      gainNode: null,
+      trackIndex: FAVORITE_TRACK_INDEX,
+      prepared: false,
+      loadGeneration: 0,
+    };
+    const deckB: Deck = {
+      id: 'B',
+      audio: audioB,
+      sourceNode: null,
+      gainNode: null,
+      trackIndex: (FAVORITE_TRACK_INDEX + 1) % playlist.length,
+      prepared: false,
+      loadGeneration: 0,
+    };
+
+    deckARef.current = deckA;
+    deckBRef.current = deckB;
+    activeDeckIdRef.current = 'A';
+
+    const onDeckTimeOrMeta = (deck: Deck) => {
+      if (activeDeckIdRef.current !== deck.id) return;
+      const t = deck.audio.currentTime;
+      setCurrentTime(Number.isFinite(t) ? t : 0);
+      const d = deck.audio.duration;
+      if (Number.isFinite(d) && d > 0) {
+        setDuration(d);
+        const tr = playlist[deck.trackIndex];
+        if (tr) {
+          setTrackMetaDurations((prev) => mergeMetaDuration(prev, tr.id, d));
+        }
       }
     };
 
-    const timer = setTimeout(autoPlay, 800);
+    const onEnded = (deck: Deck) => {
+      if (activeDeckIdRef.current !== deck.id) return;
+      if (isTransitioningRef.current) return;
+      const nextIndex = (currentTrackIndexRef.current + 1) % playlist.length;
+      void engineRef.current.performTransition(nextIndex);
+    };
+
+    const subs: Array<{ el: HTMLAudioElement; ev: string; fn: EventListener }> = [];
+
+    for (const deck of [deckA, deckB]) {
+      const tu = () => onDeckTimeOrMeta(deck);
+      const md = () => onDeckTimeOrMeta(deck);
+      const en = () => onEnded(deck);
+      deck.audio.addEventListener('timeupdate', tu);
+      deck.audio.addEventListener('loadedmetadata', md);
+      deck.audio.addEventListener('ended', en);
+      subs.push({ el: deck.audio, ev: 'timeupdate', fn: tu });
+      subs.push({ el: deck.audio, ev: 'loadedmetadata', fn: md });
+      subs.push({ el: deck.audio, ev: 'ended', fn: en });
+    }
+
+    const runAutoplayOnce = async () => {
+      if (autoplaySuccessRef.current) return;
+      const eng = engineRef.current;
+      try {
+        eng.ensureDeckGraph(deckA);
+        eng.ensureDeckGraph(deckB);
+        if (deckA.gainNode) eng.silenceDeckGain(deckA.gainNode);
+        if (deckB.gainNode) eng.silenceDeckGain(deckB.gainNode);
+
+        await eng.playDeck(deckA);
+        if (deckA.gainNode) eng.deckGainFadeIn(deckA.gainNode, FADE_IN_MS);
+        setIsPlaying(true);
+        autoplaySuccessRef.current = true;
+        eng.preloadNextOnInactive(FAVORITE_TRACK_INDEX);
+        eng.syncUiFromActiveAudio();
+      } catch {
+        setRequiresUserGesture(true);
+        setIsPlaying(false);
+      }
+    };
+
+    const scheduleAutoplay = () => {
+      if (autoplayMicrotaskQueuedRef.current) return;
+      autoplayMicrotaskQueuedRef.current = true;
+      queueMicrotask(() => {
+        autoplayMicrotaskQueuedRef.current = false;
+        void runAutoplayOnce();
+      });
+    };
+
+    const onPortfolioReady = () => scheduleAutoplay();
+    window.addEventListener(PORTFOLIO_READY_EVENT, onPortfolioReady);
+    const fallbackAutoplay = window.setTimeout(() => scheduleAutoplay(), 2800);
 
     return () => {
-      clearTimeout(timer);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('ended', handleEnded);
-      audio.pause();
-      audio.src = '';
-      if (fadeRafRef.current) {
-        cancelAnimationFrame(fadeRafRef.current);
+      autoplaySuccessRef.current = false;
+      autoplayMicrotaskQueuedRef.current = false;
+      window.removeEventListener(PORTFOLIO_READY_EVENT, onPortfolioReady);
+      window.clearTimeout(fallbackAutoplay);
+      engineRef.current.clearTransitionTimers();
+      transitionGenRef.current += 1;
+      isTransitioningRef.current = false;
+      for (const s of subs) {
+        s.el.removeEventListener(s.ev, s.fn);
       }
+      deckA.audio.pause();
+      deckB.audio.pause();
+      deckA.audio.src = '';
+      deckB.audio.src = '';
+      void audioContextRef.current?.close().catch(() => undefined);
+      audioContextRef.current = null;
+      masterGainRef.current = null;
+      deckA.prepared = false;
+      deckB.prepared = false;
+      deckA.sourceNode = null;
+      deckB.sourceNode = null;
+      deckA.gainNode = null;
+      deckB.gainNode = null;
+      deckARef.current = null;
+      deckBRef.current = null;
     };
   }, []);
 
-  // Update audio source when track changes
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    // Don't reload if same track
-    if (audio.src === currentTrack.url) return;
-
-    audio.src = currentTrack.url;
-    audio.load();
-    setCurrentTime(0);
-    
-    if (isPlaying) {
-      audio.play().then(() => {
-        smoothFadeIn(volume, 800);
-      }).catch(() => {
-        setIsPlaying(false);
-      });
-    }
-  }, [currentTrackIndex]);
-
-  // Smooth fade using requestAnimationFrame for better performance
-  const smoothFadeIn = useCallback((targetVolume: number, duration: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (fadeRafRef.current) {
-      cancelAnimationFrame(fadeRafRef.current);
-    }
-
-    const startVolume = audio.volume;
-    const startTime = performance.now();
-
-    const fade = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Ease out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const newVolume = startVolume + (targetVolume - startVolume) * eased;
-      
-      if (audio) {
-        audio.volume = Math.max(0, Math.min(1, newVolume));
-      }
-
-      if (progress < 1) {
-        fadeRafRef.current = requestAnimationFrame(fade);
-      }
-    };
-
-    fadeRafRef.current = requestAnimationFrame(fade);
-  }, []);
-
-  const smoothFadeOut = useCallback((callback?: () => void, duration: number = 1000) => {
-    const audio = audioRef.current;
-    if (!audio) {
-      callback?.();
-      return;
-    }
-
-    if (fadeRafRef.current) {
-      cancelAnimationFrame(fadeRafRef.current);
-    }
-
-    const startVolume = audio.volume;
-    const startTime = performance.now();
-
-    const fade = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Ease in cubic
-      const eased = progress * progress * progress;
-      const newVolume = startVolume * (1 - eased);
-      
-      if (audio) {
-        audio.volume = Math.max(0, newVolume);
-      }
-
-      if (progress < 1) {
-        fadeRafRef.current = requestAnimationFrame(fade);
-      } else {
-        callback?.();
-      }
-    };
-
-    fadeRafRef.current = requestAnimationFrame(fade);
-  }, []);
-
-  // Toggle play/pause - immediate response
   const togglePlay = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    const active = getActiveDeck();
+    if (!active) return;
+    ensureDeckGraph(active);
+    if (!active.gainNode) return;
 
-    if (isPlaying) {
-      // Immediate pause with quick fade
-      smoothFadeOut(() => {
-        audio.pause();
-        setIsPlaying(false);
-      }, 300);
+    if (isPlayingRef.current) {
+      deckGainFadeOut(active.gainNode, FADE_OUT_MS);
+      window.setTimeout(() => {
+        active.audio.pause();
+      }, FADE_OUT_MS + 50);
+      setIsPlaying(false);
     } else {
-      // Immediate play
-      audio.play().then(() => {
-        smoothFadeIn(volume, 500);
-        setIsPlaying(true);
-      }).catch(() => {
-        setIsPlaying(false);
-      });
+      void playDeck(active)
+        .then(() => {
+          deckGainFadeIn(active.gainNode!, FADE_IN_MS);
+          setIsPlaying(true);
+        })
+        .catch(() => {
+          setRequiresUserGesture(true);
+          setIsPlaying(false);
+        });
     }
-  }, [isPlaying, volume, smoothFadeIn, smoothFadeOut]);
-
-  // Next track - immediate response
-  const handleNextTrack = useCallback(() => {
-    if (isTransitioningRef.current) return;
-    isTransitioningRef.current = true;
-
-    const audio = audioRef.current;
-    if (!audio) {
-      setCurrentTrackIndex((prev) => (prev + 1) % playlist.length);
-      isTransitioningRef.current = false;
-      return;
-    }
-
-    // Quick fade out then switch
-    smoothFadeOut(() => {
-      audio.pause();
-      setCurrentTrackIndex((prev) => (prev + 1) % playlist.length);
-      setIsPlaying(true);
-      isTransitioningRef.current = false;
-    }, 400);
-  }, [smoothFadeOut]);
+  }, [deckGainFadeIn, deckGainFadeOut, ensureDeckGraph, getActiveDeck, playDeck]);
 
   const nextTrack = useCallback(() => {
-    handleNextTrack();
-  }, [handleNextTrack]);
+    const nextIndex = (currentTrackIndexRef.current + 1) % playlist.length;
+    setIsPlaying(true);
+    void performTransition(nextIndex);
+  }, [performTransition]);
 
-  // Previous track - immediate response
   const prevTrack = useCallback(() => {
-    if (isTransitioningRef.current) return;
-    isTransitioningRef.current = true;
+    const prevIndex = (currentTrackIndexRef.current - 1 + playlist.length) % playlist.length;
+    setIsPlaying(true);
+    void performTransition(prevIndex);
+  }, [performTransition]);
 
-    const audio = audioRef.current;
-    if (!audio) {
-      setCurrentTrackIndex((prev) => (prev - 1 + playlist.length) % playlist.length);
-      isTransitioningRef.current = false;
-      return;
-    }
+  const setVolume = useCallback(
+    (v: number) => {
+      const clamped = Math.max(0, Math.min(1, v));
+      setVolumeState(clamped);
+      volumeRef.current = clamped;
+      restoreVolumeRef.current = clamped;
+      scheduleMasterVolume(clamped, VOLUME_RAMP_MS);
+    },
+    [scheduleMasterVolume],
+  );
 
-    // Quick fade out then switch
-    smoothFadeOut(() => {
-      audio.pause();
-      setCurrentTrackIndex((prev) => (prev - 1 + playlist.length) % playlist.length);
-      setIsPlaying(true);
-      isTransitioningRef.current = false;
-    }, 400);
-  }, [smoothFadeOut]);
+  const seekTo = useCallback(
+    (time: number) => {
+      const active = getActiveDeck();
+      if (!active) return;
+      const tr = playlist[currentTrackIndexRef.current];
+      const metaMax =
+        (tr && trackMetaDurationsRef.current[tr.id]) ?? tr?.duration ?? 0;
+      const audioDur = active.audio.duration;
+      const max =
+        Number.isFinite(audioDur) && audioDur > 0
+          ? audioDur
+          : metaMax > 0
+            ? metaMax
+            : Number.POSITIVE_INFINITY;
+      const clamped = Math.max(0, Math.min(time, max));
+      active.audio.currentTime = clamped;
+      setCurrentTime(clamped);
+    },
+    [getActiveDeck],
+  );
 
-  // Set volume - immediate
-  const setVolume = useCallback((newVolume: number) => {
-    const clampedVolume = Math.max(0, Math.min(1, newVolume));
-    setVolumeState(clampedVolume);
-    
-    const audio = audioRef.current;
-    if (audio && !isTransitioningRef.current) {
-      audio.volume = clampedVolume;
-    }
-  }, []);
-
-  // Seek - immediate
-  const seekTo = useCallback((time: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    
-    const clampedTime = Math.max(0, Math.min(time, duration || audio.duration));
-    audio.currentTime = clampedTime;
-    setCurrentTime(clampedTime);
-  }, [duration]);
-
-  // Toggle player
   const togglePlayer = useCallback(() => {
-    setIsPlayerOpen((prev) => !prev);
+    setIsPlayerOpen((p) => !p);
   }, []);
 
-  // Play specific track - immediate response
-  const playTrack = useCallback((trackId: string) => {
-    if (isTransitioningRef.current) return;
-    
-    const trackIndex = playlist.findIndex((t) => t.id === trackId);
-    if (trackIndex === -1) return;
-    if (trackIndex === currentTrackIndex) {
-      // Same track, just toggle play
-      if (!isPlaying) {
-        togglePlay();
+  const playTrack = useCallback(
+    (trackId: string) => {
+      const idx = playlist.findIndex((t) => t.id === trackId);
+      if (idx === -1) return;
+      if (idx === currentTrackIndexRef.current) {
+        if (!isPlayingRef.current) togglePlay();
+        return;
       }
-      return;
+      setIsPlaying(true);
+      void performTransition(idx);
+    },
+    [performTransition, togglePlay],
+  );
+
+  const handleAutoResumeByInteraction = useCallback(() => {
+    if (!requiresUserGesture) return;
+    void resumeAudio()
+      .then(() => {
+        const active = getActiveDeck();
+        if (!active || !active.gainNode) return;
+        return playDeck(active).then(() => {
+          scheduleMasterVolume(restoreVolumeRef.current, VOLUME_RAMP_MS);
+          deckGainFadeIn(active.gainNode!, FADE_IN_MS);
+          setIsPlaying(true);
+          setRequiresUserGesture(false);
+        });
+      })
+      .catch(() => setRequiresUserGesture(true));
+  }, [deckGainFadeIn, getActiveDeck, playDeck, requiresUserGesture, resumeAudio, scheduleMasterVolume]);
+
+  useEffect(() => {
+    const onInteract = () => handleAutoResumeByInteraction();
+    window.addEventListener('pointerdown', onInteract, { passive: true });
+    window.addEventListener('keydown', onInteract);
+    return () => {
+      window.removeEventListener('pointerdown', onInteract);
+      window.removeEventListener('keydown', onInteract);
+    };
+  }, [handleAutoResumeByInteraction]);
+
+  /** Đọc duration từ metadata cho mọi bài (playlist), không ảnh hưởng deck đang phát */
+  useEffect(() => {
+    let cancelled = false;
+    const cleanups: (() => void)[] = [];
+
+    for (const track of playlist) {
+      const a = document.createElement('audio');
+      a.preload = 'metadata';
+      a.muted = true;
+      const onLoaded = () => {
+        if (cancelled) return;
+        const d = a.duration;
+        if (Number.isFinite(d) && d > 0 && d !== Number.POSITIVE_INFINITY) {
+          setTrackMetaDurations((prev) => mergeMetaDuration(prev, track.id, d));
+        }
+      };
+      a.addEventListener('loadedmetadata', onLoaded);
+      a.src = track.url;
+      a.load();
+      cleanups.push(() => {
+        a.removeEventListener('loadedmetadata', onLoaded);
+        a.removeAttribute('src');
+        a.load();
+      });
     }
 
-    isTransitioningRef.current = true;
-
-    const audio = audioRef.current;
-    if (!audio) {
-      setCurrentTrackIndex(trackIndex);
-      setIsPlaying(true);
-      isTransitioningRef.current = false;
-      return;
-    }
-
-    // Fade out and switch
-    smoothFadeOut(() => {
-      audio.pause();
-      setCurrentTrackIndex(trackIndex);
-      setIsPlaying(true);
-      isTransitioningRef.current = false;
-    }, 400);
-  }, [currentTrackIndex, isPlaying, togglePlay, smoothFadeOut]);
+    return () => {
+      cancelled = true;
+      for (const c of cleanups) c();
+    };
+  }, []);
 
   return (
     <MusicContext.Provider
@@ -404,6 +693,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         duration,
         volume,
         playlist,
+        trackMetaDurations,
         isPlayerOpen,
         togglePlay,
         nextTrack,
@@ -412,6 +702,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         seekTo,
         togglePlayer,
         playTrack,
+        requiresUserGesture,
+        resumeAudio,
       }}
     >
       {children}

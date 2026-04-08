@@ -8,9 +8,6 @@ import { inspectAttr } from 'kimi-plugin-inspect-react'
 export default defineConfig({
   base: '/',
   plugins: [basicSsl(), inspectAttr(), react()],
-  server: {
-    https: {},
-  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

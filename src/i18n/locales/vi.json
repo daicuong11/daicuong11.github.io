@@ -19,7 +19,7 @@
       "Full-Stack Developer",
       "NgườI Giải Quyết Vấn Đề",
       "NgườI Học Liên Tục",
-      "Thành Viên Nhóm"
+      "Ứng Dụng AI Trong Công Việc"
     ]
   },
   "about": {
@@ -27,13 +27,15 @@
     "subtitle": "Tìm hiểu thêm về tôi",
     "description": "Tôi là một Fresher .NET Developer nhiệt huyết với nền tảng vững chắc về kỹ thuật phần mềm. Hiện đang theo học Cử nhân Kỹ thuật Phần mềm tại Đại học Tôn Đức Thắng với GPA 8.14/10.",
     "info": {
-      "name": "Lý Đại Cương",
-      "birth": "01/01/2003",
-      "email": "lydaicuong784@gmail.com",
-      "phone": "0367265803",
-      "address": "124/17 Cộng Hòa, Phường 4, Quận Tân Bình, TP.HCM",
-      "github": "github.com/daicuong11",
-      "language": "Tiếng Anh (Aptis Esol B1)"
+      "fields": {
+        "name": { "label": "Họ và tên", "value": "Lý Đại Cương" },
+        "birth": { "label": "Ngày sinh", "value": "01/01/2003" },
+        "email": { "label": "Email", "value": "lydaicuong784@gmail.com" },
+        "phone": { "label": "Điện thoại", "value": "0367265803" },
+        "address": { "label": "Địa chỉ", "value": "124/17 Cộng Hòa, Phường 4, Quận Tân Bình, TP.HCM" },
+        "github": { "label": "GitHub", "value": "github.com/daicuong11" },
+        "language": { "label": "Ngoại ngữ", "value": "Tiếng Anh (Aptis Esol B1)" }
+      }
     },
     "education": {
       "title": "Học Vấn",
@@ -44,17 +46,28 @@
     },
     "experience": {
       "title": "Kinh Nghiệm",
-      "company": "Công ty TNHH HQSOFT",
-      "position": ".NET Developer",
-      "period": "Tháng 3/2025 - Tháng 11/2025",
-      "projects": [
+      "items": [
         {
-          "name": "Ajinomoto VNTT - eSales DMS",
-          "desc": "Giải pháp DMS doanh nghiệp để tối ưu hóa phân phối và hiệu quả bán hàng"
+          "company": "Công Ty TNHH MATSUYA R&D VIỆT NAM",
+          "position": "Nhân viên nghiên cứu và phát triển",
+          "period": "Tháng 1/2026 - hiện tại",
+          "summary": "Các dự án nội bộ và outsource.",
+          "current": true
         },
         {
-          "name": "Sabeco AMS",
-          "desc": "Hệ thống quản lý phân phối và tự động hóa lực lượng bán hàng"
+          "company": "Công ty TNHH HQSOFT",
+          "position": ".NET Developer",
+          "period": "Tháng 3/2025 - Tháng 11/2025",
+          "projects": [
+            {
+              "name": "Ajinomoto VNTT - eSales DMS",
+              "desc": "Giải pháp DMS doanh nghiệp để tối ưu hóa phân phối và hiệu quả bán hàng"
+            },
+            {
+              "name": "Sabeco AMS",
+              "desc": "Hệ thống quản lý phân phối và tự động hóa lực lượng bán hàng"
+            }
+          ]
         }
       ]
     }
@@ -156,5 +169,12 @@
     "light": "Sáng",
     "dark": "Tối",
     "neon": "Neon"
+  },
+  "music": {
+    "playerTitle": "Trình phát nhạc",
+    "nowPlaying": "Đang phát",
+    "enableAudio": "Chạm để bật âm thanh",
+    "playlist": "Danh sách phát",
+    "trackCount": "{{count}} bài"
   }
 }

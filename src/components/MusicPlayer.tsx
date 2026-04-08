@@ -1,5 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMusic } from '@/context/MusicContext';
+import { trackCoverSrc, type MusicTrack } from '@/data/musicPlaylist';
+import { useTranslation } from 'react-i18next';
 import { 
   Play, Pause, SkipBack, SkipForward, Volume2, Volume1, VolumeX,
   ChevronDown, ListMusic, Heart
@@ -13,9 +15,71 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function albumArtKey(track: MusicTrack) {
+  return `${track.id}-${track.imageName ?? ''}`;
+}
+
+function AlbumArt({ track, variant }: { track: MusicTrack; variant: 'chip' | 'hero' | 'row' }) {
+  const [imgError, setImgError] = useState(false);
+  const coverSrc = trackCoverSrc(track);
+  const usePlaceholder = !coverSrc || imgError;
+
+  const sizing =
+    variant === 'chip'
+      ? 'h-9 w-9 sm:h-10 sm:w-10 rounded-full text-sm sm:text-base'
+      : variant === 'hero'
+        ? 'h-40 w-40 sm:h-52 sm:w-52 rounded-full text-4xl sm:text-5xl'
+        : 'h-11 w-11 shrink-0 rounded-xl text-base sm:h-12 sm:w-12 sm:text-lg';
+  const hue2 = (track.coverHue + 52) % 360;
+
+  return (
+    <div
+      className={`relative flex items-center justify-center overflow-hidden ring-1 ring-border/40 ${sizing} ${usePlaceholder ? '' : 'bg-muted'}`}
+      style={
+        usePlaceholder
+          ? {
+              backgroundImage: `linear-gradient(145deg, hsl(${track.coverHue} 72% 42%), hsl(${hue2} 58% 30%))`,
+            }
+          : undefined
+      }
+      aria-hidden={usePlaceholder}
+    >
+      {coverSrc && !imgError ? (
+        <img
+          src={coverSrc}
+          alt=""
+          className="absolute inset-0 z-[1] h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={() => setImgError(true)}
+        />
+      ) : null}
+
+      {usePlaceholder ? (
+        <>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_28%_18%,rgba(255,255,255,0.38),transparent_52%)] opacity-90" />
+          {(variant === 'chip' || variant === 'hero') && (
+            <div
+              className="pointer-events-none absolute inset-0 z-[2] opacity-[0.2]"
+              style={{
+                background: `repeating-radial-gradient(circle at center, transparent 0, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 3px)`,
+              }}
+            />
+          )}
+          <span className="relative z-[3] font-bold tracking-tight text-white drop-shadow-md select-none">
+            {track.title.trim().charAt(0).toUpperCase() || '♪'}
+          </span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 // Mini Vinyl Button Component
 function MiniVinylButton({ onClick }: { onClick: () => void }) {
   const { isPlaying, currentTrack } = useMusic();
+  const { t } = useTranslation();
 
   return (
     <motion.button
@@ -23,7 +87,7 @@ function MiniVinylButton({ onClick }: { onClick: () => void }) {
       className="relative group"
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
-      title="Music Player"
+      title={t('music.playerTitle')}
     >
       {/* Outer Glow Ring */}
       <motion.div
@@ -49,12 +113,9 @@ function MiniVinylButton({ onClick }: { onClick: () => void }) {
           ease: 'linear',
         }}
       >
-        {/* Album Cover */}
-        <img
-          src={currentTrack.cover}
-          alt={currentTrack.title}
-          className="w-full h-full object-cover"
-        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <AlbumArt key={albumArtKey(currentTrack)} track={currentTrack} variant="chip" />
+        </div>
 
         {/* Vinyl Grooves Overlay */}
         <div 
@@ -71,13 +132,6 @@ function MiniVinylButton({ onClick }: { onClick: () => void }) {
             `,
           }}
         />
-
-        {/* Center Label */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <div className="w-1 h-1 rounded-full bg-black" />
-          </div>
-        </div>
       </motion.div>
 
       {/* Playing Indicator Dot */}
@@ -94,7 +148,7 @@ function MiniVinylButton({ onClick }: { onClick: () => void }) {
 
       {/* Tooltip */}
       <span className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-        {isPlaying ? `${currentTrack.title} - ${currentTrack.artist}` : 'Music Player'}
+        {isPlaying ? `${currentTrack.title} — ${currentTrack.artist}` : t('music.playerTitle')}
       </span>
     </motion.button>
   );
@@ -109,13 +163,17 @@ function MusicModal({ onClose }: { onClose: () => void }) {
     duration,
     volume,
     playlist,
+    trackMetaDurations,
     togglePlay,
     nextTrack,
     prevTrack,
     setVolume,
     seekTo,
     playTrack,
+    requiresUserGesture,
+    resumeAudio,
   } = useMusic();
+  const { t } = useTranslation();
 
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
@@ -140,12 +198,15 @@ function MusicModal({ onClose }: { onClose: () => void }) {
   }, [showPlaylist]);
 
   // Handle progress bar click/drag
+  const effectiveDuration =
+    duration > 0 ? duration : (trackMetaDurations[currentTrack.id] ?? currentTrack.duration);
+
   const handleProgressStart = useCallback((clientX: number) => {
-    if (!progressRef.current || !duration) return;
+    if (!progressRef.current || !effectiveDuration) return;
     const rect = progressRef.current.getBoundingClientRect();
     const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    seekTo(percent * duration);
-  }, [duration, seekTo]);
+    seekTo(percent * effectiveDuration);
+  }, [effectiveDuration, seekTo]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
@@ -201,6 +262,13 @@ function MusicModal({ onClose }: { onClose: () => void }) {
   const handleTrackSelect = (trackId: string) => {
     playTrack(trackId);
   };
+
+  const handleEnableAudioClick = useCallback(async () => {
+    await resumeAudio();
+    if (!isPlaying) {
+      togglePlay();
+    }
+  }, [isPlaying, resumeAudio, togglePlay]);
 
   // Toggle mute
   const toggleMute = () => {
@@ -267,14 +335,15 @@ function MusicModal({ onClose }: { onClose: () => void }) {
         {/* Close Button */}
         <motion.button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 transition-colors z-20"
+          className="absolute top-4 right-4 p-2 rounded-full text-foreground hover:bg-foreground/10 transition-colors z-20"
           whileHover={{ scale: 1.1, rotate: 90 }}
           whileTap={{ scale: 0.9 }}
         >
           <ChevronDown className="w-5 h-5" />
         </motion.button>
 
-        <div className="relative p-6 sm:p-8 z-10">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="relative shrink-0 p-6 sm:p-8">
           {/* Large Vinyl Record */}
           <div className="flex justify-center mb-6 sm:mb-8">
             <div className="relative">
@@ -283,8 +352,8 @@ function MusicModal({ onClose }: { onClose: () => void }) {
                 className="absolute inset-0 rounded-full"
                 style={{
                   background: 'conic-gradient(from 0deg, hsl(var(--primary)), hsl(var(--accent)), hsl(var(--secondary)), hsl(var(--primary)))',
-                  filter: 'blur(30px)',
-                  opacity: isPlaying ? 0.5 : 0.2,
+                  filter: 'blur(18px)',
+                  opacity: isPlaying ? 0.35 : 0.12,
                 }}
                 animate={isPlaying ? { rotate: 360, scale: [1, 1.05, 1] } : { rotate: 0, scale: 1 }}
                 transition={{
@@ -295,7 +364,7 @@ function MusicModal({ onClose }: { onClose: () => void }) {
 
               {/* Vinyl */}
               <motion.div
-                className="relative w-40 h-40 sm:w-52 sm:h-52 rounded-full overflow-hidden shadow-2xl"
+                className="relative flex h-40 w-40 items-center justify-center overflow-hidden rounded-full shadow-2xl sm:h-52 sm:w-52"
                 style={{
                   boxShadow: '0 20px 60px rgba(0,0,0,0.5), inset 0 0 30px rgba(0,0,0,0.3)',
                 }}
@@ -306,16 +375,11 @@ function MusicModal({ onClose }: { onClose: () => void }) {
                   ease: 'linear',
                 }}
               >
-                {/* Album Cover */}
-                <img
-                  src={currentTrack.cover}
-                  alt={currentTrack.title}
-                  className="w-full h-full object-cover"
-                />
+                <AlbumArt key={albumArtKey(currentTrack)} track={currentTrack} variant="hero" />
 
                 {/* Vinyl Grooves */}
                 <div 
-                  className="absolute inset-0 rounded-full pointer-events-none"
+                  className="pointer-events-none absolute inset-0 rounded-full"
                   style={{
                     background: `
                       repeating-radial-gradient(
@@ -328,13 +392,6 @@ function MusicModal({ onClose }: { onClose: () => void }) {
                     `,
                   }}
                 />
-
-                {/* Center Label */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
-                    <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-black" />
-                  </div>
-                </div>
               </motion.div>
 
               {/* Tone Arm */}
@@ -375,29 +432,29 @@ function MusicModal({ onClose }: { onClose: () => void }) {
             <div
               ref={progressRef}
               onMouseDown={handleMouseDown}
-              className="h-2 bg-white/10 rounded-full cursor-pointer overflow-hidden group relative"
+              className="h-2 bg-foreground/10 rounded-full cursor-pointer overflow-hidden group relative"
             >
               {/* Background */}
-              <div className="absolute inset-0 bg-white/5 rounded-full" />
+              <div className="absolute inset-0 bg-foreground/5 rounded-full" />
               
               {/* Progress */}
               <motion.div
                 className="absolute inset-y-0 left-0 rounded-full"
                 style={{
-                  width: `${(currentTime / duration) * 100}%`,
+                  width: `${effectiveDuration > 0 ? (currentTime / effectiveDuration) * 100 : 0}%`,
                   background: 'linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)))',
                 }}
               />
               
               {/* Hover Handle */}
               <div 
-                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ left: `calc(${(currentTime / duration) * 100}% - 8px)` }}
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ left: `calc(${effectiveDuration > 0 ? (currentTime / effectiveDuration) * 100 : 0}% - 8px)` }}
               />
             </div>
             <div className="flex justify-between mt-2 text-xs text-muted-foreground font-mono">
               <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+              <span>{formatTime(effectiveDuration)}</span>
             </div>
           </div>
 
@@ -406,7 +463,7 @@ function MusicModal({ onClose }: { onClose: () => void }) {
             {/* Previous */}
             <motion.button
               onClick={prevTrack}
-              className="p-2.5 sm:p-3 rounded-full hover:bg-white/10 transition-colors"
+              className="p-2.5 sm:p-3 rounded-full text-foreground hover:bg-foreground/10 transition-colors"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -433,7 +490,7 @@ function MusicModal({ onClose }: { onClose: () => void }) {
             {/* Next */}
             <motion.button
               onClick={nextTrack}
-              className="p-2.5 sm:p-3 rounded-full hover:bg-white/10 transition-colors"
+              className="p-2.5 sm:p-3 rounded-full text-foreground hover:bg-foreground/10 transition-colors"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
             >
@@ -447,7 +504,7 @@ function MusicModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center gap-2 sm:gap-3 flex-1">
               <motion.button
                 onClick={toggleMute}
-                className="p-2 rounded-full hover:bg-white/10 transition-colors"
+                className="p-2 rounded-full text-foreground hover:bg-foreground/10 transition-colors"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
               >
@@ -464,7 +521,7 @@ function MusicModal({ onClose }: { onClose: () => void }) {
               <div 
                 ref={volumeRef}
                 onMouseDown={handleVolumeMouseDown}
-                className="flex-1 h-2 bg-white/10 rounded-full cursor-pointer overflow-hidden relative"
+                className="flex-1 h-2 bg-foreground/10 rounded-full cursor-pointer overflow-hidden relative"
               >
                 <motion.div
                   className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary/50 to-primary"
@@ -478,7 +535,7 @@ function MusicModal({ onClose }: { onClose: () => void }) {
               <motion.button
                 onClick={() => setIsLiked(!isLiked)}
                 className={`p-2 rounded-full transition-colors ${
-                  isLiked ? 'text-red-500 bg-red-500/10' : 'hover:bg-white/10'
+                  isLiked ? 'text-red-500 bg-red-500/10' : 'text-foreground hover:bg-foreground/10'
                 }`}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
@@ -489,7 +546,7 @@ function MusicModal({ onClose }: { onClose: () => void }) {
               <motion.button
                 onClick={() => setShowPlaylist(!showPlaylist)}
                 className={`p-2 rounded-full transition-colors ${
-                  showPlaylist ? 'bg-primary/20 text-primary' : 'hover:bg-white/10'
+                  showPlaylist ? 'bg-primary/20 text-primary' : 'text-foreground hover:bg-foreground/10'
                 }`}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
@@ -504,103 +561,114 @@ function MusicModal({ onClose }: { onClose: () => void }) {
         <AnimatePresence>
           {showPlaylist && (
             <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 240, opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ type: 'spring', damping: 30, stiffness: 400 }}
-              className="relative border-t border-white/10 overflow-hidden"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+              className="relative flex min-h-0 max-h-[min(44vh,400px)] flex-col border-t border-border/80 bg-muted/35"
             >
-              <div 
+              <div
                 ref={playlistRef}
-                className="h-full overflow-y-auto p-4 custom-scrollbar"
-                style={{ 
-                  overscrollBehavior: 'contain',
-                  scrollbarWidth: 'thin',
-                }}
+                className="music-playlist-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 pt-0 sm:px-4"
               >
-                <h4 className="text-xs font-semibold mb-3 text-muted-foreground uppercase tracking-wider sticky top-0 bg-inherit pb-2">
-                  Playlist ({playlist.length} tracks)
-                </h4>
-                <div className="space-y-1">
+                <div className="sticky top-0 z-20 -mx-1 mb-2 border-b border-border/80 bg-gradient-to-b from-background/95 via-background/88 to-transparent px-1 py-2.5 backdrop-blur-md">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    {t('music.playlist')}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground/85">
+                    {t('music.trackCount', { count: playlist.length })}
+                  </p>
+                </div>
+
+                <ul className="flex flex-col gap-1" role="list">
                   {playlist.map((track, index) => {
                     const isCurrentTrack = currentTrack.id === track.id;
                     return (
-                      <motion.button
-                        key={track.id}
-                        onClick={() => handleTrackSelect(track.id)}
-                        className={`w-full flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl transition-all text-left ${
-                          isCurrentTrack
-                            ? 'bg-primary/20 border border-primary/30'
-                            : 'hover:bg-white/5'
-                        }`}
-                        whileHover={{ x: 5, backgroundColor: isCurrentTrack ? '' : 'rgba(255,255,255,0.08)' }}
-                        whileTap={{ scale: 0.98 }}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.03 }}
-                      >
-                        {/* Track Number / Playing Indicator */}
-                        <div className="w-5 sm:w-6 flex justify-center flex-shrink-0">
-                          {isCurrentTrack && isPlaying ? (
-                            <div className="flex gap-0.5 items-end h-3 sm:h-4">
-                              {[1, 2, 3].map((i) => (
-                                <motion.div
-                                  key={i}
-                                  className="w-0.5 sm:w-1 bg-primary rounded-full"
-                                  animate={{
-                                    height: [3, 12, 3],
-                                  }}
-                                  transition={{
-                                    duration: 0.4,
-                                    repeat: Infinity,
-                                    delay: i * 0.1,
-                                    ease: 'easeInOut',
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          ) : (
-                            <span className={`text-xs sm:text-sm ${isCurrentTrack ? 'text-primary' : 'text-muted-foreground'}`}>
-                              {index + 1}
-                            </span>
-                          )}
-                        </div>
+                      <li key={track.id}>
+                        <motion.button
+                          type="button"
+                          onClick={() => handleTrackSelect(track.id)}
+                          className={`grid w-full grid-cols-[1.75rem_2.75rem_1fr_auto] items-center gap-x-3 rounded-xl px-2 py-2 text-left transition-colors sm:grid-cols-[2rem_3rem_1fr_auto] sm:px-2.5 sm:py-2.5 ${
+                            isCurrentTrack
+                              ? 'bg-primary/18 ring-1 ring-primary/35'
+                              : 'hover:bg-foreground/[0.06]'
+                          }`}
+                          whileTap={{ scale: 0.99 }}
+                        >
+                          <div className="flex h-full w-7 justify-center sm:w-8">
+                            {isCurrentTrack && isPlaying ? (
+                              <div className="flex h-9 items-end gap-0.5">
+                                {[0, 1, 2].map((i) => (
+                                  <motion.span
+                                    key={i}
+                                    className="w-0.5 rounded-full bg-primary sm:w-1"
+                                    animate={{ height: [4, 14, 4] }}
+                                    transition={{
+                                      duration: 0.45,
+                                      repeat: Infinity,
+                                      delay: i * 0.12,
+                                      ease: 'easeInOut',
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <span
+                                className={`self-center text-xs tabular-nums sm:text-sm ${
+                                  isCurrentTrack ? 'font-semibold text-primary' : 'text-muted-foreground'
+                                }`}
+                              >
+                                {index + 1}
+                              </span>
+                            )}
+                          </div>
 
-                        {/* Track Cover */}
-                        <div className={`relative w-8 h-8 sm:w-10 sm:h-10 rounded-lg overflow-hidden flex-shrink-0 ${
-                          isCurrentTrack && isPlaying ? 'ring-2 ring-primary' : ''
-                        }`}>
-                          <img
-                            src={track.cover}
-                            alt={track.title}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
+                          <div
+                            className={`flex justify-center ${
+                              isCurrentTrack && isPlaying ? 'ring-2 ring-primary/80 ring-offset-2 ring-offset-background' : ''
+                            } rounded-xl`}
+                          >
+                            <AlbumArt key={albumArtKey(track)} track={track} variant="row" />
+                          </div>
 
-                        {/* Track Info */}
-                        <div className="flex-1 min-w-0">
-                          <p className={`font-medium text-xs sm:text-sm truncate ${
-                            isCurrentTrack ? 'text-primary' : ''
-                          }`}>
-                            {track.title}
-                          </p>
-                          <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-                            {track.artist}
-                          </p>
-                        </div>
+                          <div className="min-w-0 pr-1">
+                            <p
+                              className={`truncate text-sm font-medium leading-tight ${
+                                isCurrentTrack ? 'text-primary' : 'text-foreground'
+                              }`}
+                            >
+                              {track.title}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
+                          </div>
 
-                        {/* Duration */}
-                        <span className="text-[10px] sm:text-xs text-muted-foreground font-mono">
-                          {formatTime(track.duration)}
-                        </span>
-                      </motion.button>
+                          <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground sm:text-xs">
+                            {formatTime(trackMetaDurations[track.id] ?? track.duration)}
+                          </span>
+                        </motion.button>
+                      </li>
                     );
                   })}
-                </div>
+                </ul>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
+
+        {requiresUserGesture && (
+          <div className="absolute bottom-4 left-1/2 z-30 -translate-x-1/2">
+            <motion.button
+              type="button"
+              onClick={() => void handleEnableAudioClick()}
+              className="rounded-full bg-primary px-4 py-2 text-xs font-medium text-primary-foreground shadow-lg sm:text-sm"
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+            >
+              {t('music.enableAudio')}
+            </motion.button>
+          </div>
+        )}
       </motion.div>
     </motion.div>,
     document.body

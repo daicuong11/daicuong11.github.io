@@ -14,12 +14,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme') as Theme;
-      if (saved) return saved;
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
-      }
+      if (saved === 'light' || saved === 'dark' || saved === 'neon') return saved;
     }
-    return 'dark';
+    return 'neon';
   });
 
   useEffect(() => {

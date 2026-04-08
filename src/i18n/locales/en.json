@@ -27,13 +27,15 @@
     "subtitle": "Get to know me better",
     "description": "I am a motivated Fresher .NET Developer with a strong foundation in software engineering. Currently pursuing my Bachelor's degree at Ton Duc Thang University with a GPA of 8.14/10.",
     "info": {
-      "name": "Ly Dai Cuong",
-      "birth": "January 1, 2003",
-      "email": "lydaicuong784@gmail.com",
-      "phone": "0367265803",
-      "address": "124/17 Cong Hoa Street, Ward 4, Tan Binh District, HCMC",
-      "github": "github.com/daicuong11",
-      "language": "English (Aptis Esol B1)"
+      "fields": {
+        "name": { "label": "Full name", "value": "Ly Dai Cuong" },
+        "birth": { "label": "Date of birth", "value": "January 1, 2003" },
+        "email": { "label": "Email", "value": "lydaicuong784@gmail.com" },
+        "phone": { "label": "Phone", "value": "0367265803" },
+        "address": { "label": "Address", "value": "124/17 Cong Hoa Street, Ward 4, Tan Binh District, HCMC" },
+        "github": { "label": "GitHub", "value": "github.com/daicuong11" },
+        "language": { "label": "Languages", "value": "English (Aptis Esol B1)" }
+      }
     },
     "education": {
       "title": "Education",
@@ -44,17 +46,28 @@
     },
     "experience": {
       "title": "Experience",
-      "company": "HQSOFT Company Limited",
-      "position": ".NET Developer",
-      "period": "March 2025 - November 2025",
-      "projects": [
+      "items": [
         {
-          "name": "Ajinomoto VNTT - eSales DMS",
-          "desc": "Enterprise DMS solution for optimizing distribution and sales efficiency"
+          "company": "MATSUYA R&D VIETNAM Co., Ltd.",
+          "position": "Research and Development Staff",
+          "period": "January 2026 - Present",
+          "summary": "Internal projects and outsourcing work.",
+          "current": true
         },
         {
-          "name": "Sabeco AMS",
-          "desc": "Distribution management and sales force automation system"
+          "company": "HQSOFT Company Limited",
+          "position": ".NET Developer",
+          "period": "March 2025 - November 2025",
+          "projects": [
+            {
+              "name": "Ajinomoto VNTT - eSales DMS",
+              "desc": "Enterprise DMS solution for optimizing distribution and sales efficiency"
+            },
+            {
+              "name": "Sabeco AMS",
+              "desc": "Distribution management and sales force automation system"
+            }
+          ]
         }
       ]
     }
@@ -156,5 +169,12 @@
     "light": "Light",
     "dark": "Dark",
     "neon": "Neon"
+  },
+  "music": {
+    "playerTitle": "Music player",
+    "nowPlaying": "Now playing",
+    "enableAudio": "Tap to enable audio",
+    "playlist": "Playlist",
+    "trackCount": "{{count}} tracks"
   }
 }

@@ -251,17 +251,19 @@ export default function Contact() {
                   whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
                   whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
                 >
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      {t('contact.form.sending')}
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4 sm:w-5 sm:h-5" />
-                      {t('contact.form.send')}
-                    </>
-                  )}
+                  <span className="relative z-[1] inline-flex w-full items-center justify-center gap-2">
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        {t('contact.form.sending')}
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 sm:w-5 sm:h-5" />
+                        {t('contact.form.send')}
+                      </>
+                    )}
+                  </span>
                 </motion.button>
 
                 {/* Status Messages */}

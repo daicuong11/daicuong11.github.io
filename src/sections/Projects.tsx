@@ -74,9 +74,9 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
           </span>
         </div>
 
-        {/* Hover Overlay with Actions */}
+        {/* Nút Demo/Code: không phủ full nền primary lên ảnh — để preview cuộn ảnh vẫn rõ */}
         <motion.div
-          className="absolute inset-0 bg-primary/80 flex items-center justify-center gap-3 sm:gap-4 z-20"
+          className="absolute inset-0 z-20 flex items-center justify-center gap-3 sm:gap-4 pointer-events-none"
           initial={{ opacity: 0 }}
           animate={{ opacity: isHovered ? 1 : 0 }}
           transition={{ duration: 0.3 }}
@@ -86,7 +86,7 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
               href={project.demoUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2.5 sm:p-3 rounded-full bg-white text-primary shadow-lg"
+              className="pointer-events-auto p-2.5 sm:p-3 rounded-full bg-background/85 text-primary shadow-lg backdrop-blur-md border border-border/60"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               initial={{ y: 20, opacity: 0 }}
@@ -101,7 +101,7 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
               href={project.codeUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2.5 sm:p-3 rounded-full bg-white text-primary shadow-lg"
+              className="pointer-events-auto p-2.5 sm:p-3 rounded-full bg-background/85 text-primary shadow-lg backdrop-blur-md border border-border/60"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               initial={{ y: 20, opacity: 0 }}

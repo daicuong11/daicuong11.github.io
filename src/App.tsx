@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeProvider } from '@/context/ThemeContext';
-import { MusicProvider } from '@/context/MusicContext';
+import { MusicProvider, PORTFOLIO_READY_EVENT } from '@/context/MusicContext';
 import '@/i18n/config';
 
+import { useTypingEffect } from '@/hooks/useScrollAnimation';
 import Navigation from '@/sections/Navigation';
 import Hero from '@/sections/Hero';
 import About from '@/sections/About';
@@ -15,6 +16,7 @@ import Footer from '@/sections/Footer';
 // Loading Screen Component
 function LoadingScreen({ onComplete }: { onComplete: () => void }) {
   const [progress, setProgress] = useState(0);
+  const thinkingDots = useTypingEffect(['...'], 220, 160);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -62,14 +64,15 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
         />
       </div>
 
-      {/* Loading Text */}
+      {/* Thinking text — dots animate via useTypingEffect */}
       <motion.p
         className="mt-4 text-sm text-muted-foreground code-font"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
       >
-        Loading...
+        thinking{' '}
+        <span aria-hidden="true">{thinkingDots}</span>
       </motion.p>
 
       {/* Code Particles */}
@@ -176,7 +179,12 @@ function AppContent() {
     <>
       <AnimatePresence mode="wait">
         {isLoading && (
-          <LoadingScreen onComplete={() => setIsLoading(false)} />
+          <LoadingScreen
+            onComplete={() => {
+              setIsLoading(false);
+              window.dispatchEvent(new Event(PORTFOLIO_READY_EVENT));
+            }}
+          />
         )}
       </AnimatePresence>
 

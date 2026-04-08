@@ -18,12 +18,14 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    fallbackLng: 'en',
+    /** Ngôn ngữ mặc định: vi; thiếu key trong vi thì lấy từ en */
+    fallbackLng: { default: ['vi', 'en'] },
     interpolation: {
       escapeValue: false,
     },
     detection: {
-      order: ['localStorage', 'navigator'],
+      /** Chỉ đọc lựa chọn đã lưu; lần đầu vào không theo navigator → mặc định vi */
+      order: ['localStorage'],
       caches: ['localStorage'],
     },
   });
