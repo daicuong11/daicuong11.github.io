@@ -22,6 +22,8 @@ interface MusicContextType {
   playTrack: (trackId: string) => void;
   requiresUserGesture: boolean;
   resumeAudio: () => Promise<void>;
+  /** Gọi từ gesture (vd. chạm màn hình loading) để mở AudioContext / bật tiếng sau autoplay muted */
+  unlockFromUserGesture: () => void;
 }
 
 /** Bài mặc định khi mở app (id trong playlist, ví dụ '3' → index 2) */
@@ -117,6 +119,22 @@ function mergeMetaDuration(
   return { ...prev, [trackId]: seconds };
 }
 
+/** Fade âm lượng element (trước khi có Web Audio) — không đụng AudioContext */
+function rampElementVolume(audio: HTMLAudioElement, from: number, to: number, durationMs: number): void {
+  if (durationMs <= 0) {
+    audio.volume = to;
+    return;
+  }
+  const t0 = performance.now();
+  const step = () => {
+    const elapsed = performance.now() - t0;
+    const p = Math.min(1, elapsed / durationMs);
+    audio.volume = from + (to - from) * p;
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(FAVORITE_TRACK_INDEX);
@@ -151,6 +169,9 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const restoreVolumeRef = useRef(0.8);
   const autoplaySuccessRef = useRef(false);
   const autoplayMicrotaskQueuedRef = useRef(false);
+  const autoplayInFlightRef = useRef(false);
+  /** Chỉ true sau gesture: đã tạo AudioContext + MediaElementSource (Chrome chặn nếu tạo sớm) */
+  const useWebAudioRef = useRef(false);
 
   const currentTrack = playlist[currentTrackIndex];
 
@@ -159,32 +180,18 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const getActiveDeck = useCallback(() => getDeck(activeDeckIdRef.current), [getDeck]);
   const getInactiveDeck = useCallback(() => getDeck(activeDeckIdRef.current === 'A' ? 'B' : 'A'), [getDeck]);
 
-  const getOrCreateAudioContext = useCallback(() => {
-    if (typeof window === 'undefined') return null;
-    if (!audioContextRef.current) {
-      const ctx = new window.AudioContext();
-      const master = ctx.createGain();
-      master.gain.value = volumeRef.current;
-      master.connect(ctx.destination);
-      audioContextRef.current = ctx;
-      masterGainRef.current = master;
-    }
-    return audioContextRef.current;
+  const ensureDeckGraph = useCallback((deck: Deck) => {
+    if (!useWebAudioRef.current) return;
+    const ctx = audioContextRef.current;
+    const master = masterGainRef.current;
+    if (!ctx || !master || deck.prepared) return;
+    deck.sourceNode = ctx.createMediaElementSource(deck.audio);
+    deck.gainNode = ctx.createGain();
+    deck.gainNode.gain.value = GAIN_EPS;
+    deck.sourceNode.connect(deck.gainNode);
+    deck.gainNode.connect(master);
+    deck.prepared = true;
   }, []);
-
-  const ensureDeckGraph = useCallback(
-    (deck: Deck) => {
-      const ctx = getOrCreateAudioContext();
-      if (!ctx || !masterGainRef.current || deck.prepared) return;
-      deck.sourceNode = ctx.createMediaElementSource(deck.audio);
-      deck.gainNode = ctx.createGain();
-      deck.gainNode.gain.value = GAIN_EPS;
-      deck.sourceNode.connect(deck.gainNode);
-      deck.gainNode.connect(masterGainRef.current);
-      deck.prepared = true;
-    },
-    [getOrCreateAudioContext],
-  );
 
   const silenceDeckGain = useCallback((gainNode: GainNode) => {
     const ctx = audioContextRef.current;
@@ -256,7 +263,8 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   }, [getActiveDeck]);
 
   const resumeAudio = useCallback(async () => {
-    const ctx = getOrCreateAudioContext();
+    if (!useWebAudioRef.current) return;
+    const ctx = audioContextRef.current;
     if (!ctx) return;
     const active = getActiveDeck();
     if (active) ensureDeckGraph(active);
@@ -264,16 +272,75 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       await ctx.resume();
     }
     setRequiresUserGesture(false);
-  }, [ensureDeckGraph, getActiveDeck, getOrCreateAudioContext]);
+  }, [ensureDeckGraph, getActiveDeck]);
 
   const playDeck = useCallback(
     async (deck: Deck) => {
+      if (!useWebAudioRef.current) {
+        deck.audio.muted = false;
+        deck.audio.volume = Math.min(1, volumeRef.current);
+        await deck.audio.play();
+        return;
+      }
       ensureDeckGraph(deck);
       await resumeAudio();
+      deck.audio.volume = 1;
       await deck.audio.play();
     },
     [ensureDeckGraph, resumeAudio],
   );
+
+  /** Gọi trong stack gesture (pointerdown/click) — lần đầu mới tạo AudioContext */
+  const migrateToWebAudioFromGesture = useCallback((): Promise<void> => {
+    if (useWebAudioRef.current) return Promise.resolve();
+
+    const deckA = deckARef.current;
+    const deckB = deckBRef.current;
+    if (!deckA || !deckB) return Promise.resolve();
+
+    const activeId = activeDeckIdRef.current;
+    const active = activeId === 'A' ? deckA : deckB;
+    const activeTime = active.audio.currentTime;
+    const wasPlaying = !active.audio.paused;
+
+    deckA.audio.pause();
+    deckB.audio.pause();
+
+    const ctx = new AudioContext();
+    const master = ctx.createGain();
+    master.gain.value = volumeRef.current;
+    master.connect(ctx.destination);
+    audioContextRef.current = ctx;
+    masterGainRef.current = master;
+    useWebAudioRef.current = true;
+
+    for (const deck of [deckA, deckB]) {
+      deck.sourceNode = ctx.createMediaElementSource(deck.audio);
+      deck.gainNode = ctx.createGain();
+      deck.gainNode.gain.value = GAIN_EPS;
+      deck.sourceNode.connect(deck.gainNode);
+      deck.gainNode.connect(master);
+      deck.prepared = true;
+      deck.audio.volume = 1;
+    }
+
+    return ctx
+      .resume()
+      .then(() => {
+        if (wasPlaying) {
+          active.audio.currentTime = activeTime;
+          return active.audio.play();
+        }
+        return undefined;
+      })
+      .then(() => {
+        if (wasPlaying && active.gainNode) {
+          deckGainFadeIn(active.gainNode, FADE_IN_MS);
+        }
+        scheduleMasterVolume(volumeRef.current, 0);
+        setRequiresUserGesture(false);
+      });
+  }, [deckGainFadeIn, scheduleMasterVolume]);
 
   const preloadNextOnInactive = useCallback(
     (playingIndex: number) => {
@@ -302,6 +369,75 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     [preloadNextOnInactive, syncUiFromActiveAudio],
   );
 
+  /** Chuyển bài chỉ bằng volume trên HTMLAudioElement (chưa bật Web Audio) */
+  const performTransitionElement = useCallback(
+    async (targetTrackIndex: number) => {
+      const activePre = getActiveDeck();
+      const inactivePre = getInactiveDeck();
+      if (!activePre || !inactivePre) return;
+
+      if (
+        targetTrackIndex === activePre.trackIndex &&
+        trackUrlMatchesAudio(activePre.audio, playlist[targetTrackIndex].url)
+      ) {
+        setCurrentTrackIndex(targetTrackIndex);
+        syncUiFromActiveAudio();
+        return;
+      }
+
+      if (isTransitioningRef.current) {
+        clearTransitionTimers();
+        transitionGenRef.current += 1;
+        isTransitioningRef.current = false;
+      }
+
+      const active = getActiveDeck();
+      const inactive = getInactiveDeck();
+      if (!active || !inactive) return;
+
+      clearTransitionTimers();
+      isTransitioningRef.current = true;
+      transitionGenRef.current += 1;
+      const gen = transitionGenRef.current;
+
+      const newActiveId: DeckId = activeDeckIdRef.current === 'A' ? 'B' : 'A';
+      const vol = volumeRef.current;
+
+      try {
+        await loadTrackOnDeck(inactive, targetTrackIndex);
+        if (gen !== transitionGenRef.current) return;
+
+        inactive.audio.currentTime = 0;
+        inactive.audio.volume = 0;
+        await inactive.audio.play();
+        active.audio.volume = vol;
+
+        const steps = Math.max(12, Math.floor(CROSSFADE_MS / 60));
+        const stepMs = CROSSFADE_MS / steps;
+
+        for (let i = 1; i <= steps; i++) {
+          if (gen !== transitionGenRef.current) return;
+          const p = i / steps;
+          active.audio.volume = vol * (1 - p);
+          inactive.audio.volume = vol * p;
+          await new Promise<void>((r) => window.setTimeout(r, stepMs));
+        }
+
+        active.audio.pause();
+        active.audio.currentTime = 0;
+        inactive.audio.volume = vol;
+
+        if (gen !== transitionGenRef.current) return;
+        finishTransition(gen, newActiveId, targetTrackIndex);
+      } catch {
+        isTransitioningRef.current = false;
+        setRequiresUserGesture(true);
+        setIsPlaying(false);
+      }
+    },
+    [clearTransitionTimers, finishTransition, getActiveDeck, getInactiveDeck, syncUiFromActiveAudio],
+  );
+
   const performTransition = useCallback(
     async (targetTrackIndex: number) => {
       const activePre = getActiveDeck();
@@ -326,6 +462,11 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       const active = getActiveDeck();
       const inactive = getInactiveDeck();
       if (!active || !inactive) return;
+
+      if (!useWebAudioRef.current) {
+        await performTransitionElement(targetTrackIndex);
+        return;
+      }
 
       clearTransitionTimers();
       isTransitioningRef.current = true;
@@ -377,6 +518,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       finishTransition,
       getActiveDeck,
       getInactiveDeck,
+      performTransitionElement,
       playDeck,
       deckGainFadeIn,
       deckGainFadeOut,
@@ -413,10 +555,12 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     const audioA = new Audio(playlist[FAVORITE_TRACK_INDEX].url);
     audioA.loop = false;
     audioA.preload = 'auto';
+    audioA.setAttribute('playsinline', '');
 
     const audioB = new Audio(playlist[(FAVORITE_TRACK_INDEX + 1) % playlist.length].url);
     audioB.loop = false;
     audioB.preload = 'auto';
+    audioB.setAttribute('playsinline', '');
 
     const deckA: Deck = {
       id: 'A',
@@ -476,24 +620,62 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       subs.push({ el: deck.audio, ev: 'ended', fn: en });
     }
 
+    /** Chỉ HTMLAudioElement — không tạo AudioContext (tránh cảnh báo / chặn autoplay Chrome) */
     const runAutoplayOnce = async () => {
-      if (autoplaySuccessRef.current) return;
+      if (autoplaySuccessRef.current || autoplayInFlightRef.current) return;
+      autoplayInFlightRef.current = true;
       const eng = engineRef.current;
-      try {
-        eng.ensureDeckGraph(deckA);
-        eng.ensureDeckGraph(deckB);
-        if (deckA.gainNode) eng.silenceDeckGain(deckA.gainNode);
-        if (deckB.gainNode) eng.silenceDeckGain(deckB.gainNode);
 
-        await eng.playDeck(deckA);
-        if (deckA.gainNode) eng.deckGainFadeIn(deckA.gainNode, FADE_IN_MS);
+      const markSuccess = () => {
+        rampElementVolume(deckA.audio, deckA.audio.volume, volumeRef.current, FADE_IN_MS);
         setIsPlaying(true);
         autoplaySuccessRef.current = true;
+        setRequiresUserGesture(false);
         eng.preloadNextOnInactive(FAVORITE_TRACK_INDEX);
         eng.syncUiFromActiveAudio();
+      };
+
+      const tryAudiblePlay = async () => {
+        await waitForCanPlay(deckA.audio);
+        deckA.audio.muted = false;
+        deckB.audio.muted = false;
+        deckA.audio.volume = 0;
+        await deckA.audio.play();
+      };
+
+      try {
+        await tryAudiblePlay();
+        markSuccess();
       } catch {
-        setRequiresUserGesture(true);
-        setIsPlaying(false);
+        await new Promise<void>((r) => window.setTimeout(r, 120));
+        try {
+          deckA.audio.muted = false;
+          deckA.audio.volume = 0;
+          await deckA.audio.play();
+          markSuccess();
+        } catch {
+          try {
+            deckA.audio.muted = true;
+            deckA.audio.volume = 0;
+            await deckA.audio.play();
+            deckA.audio.muted = false;
+            deckA.audio.volume = 0;
+            await deckA.audio.play().catch(() => undefined);
+            markSuccess();
+          } catch {
+            deckA.audio.muted = false;
+            try {
+              deckA.audio.pause();
+            } catch {
+              /* ignore */
+            }
+            setRequiresUserGesture(true);
+            setIsPlaying(false);
+            autoplaySuccessRef.current = false;
+          }
+        }
+      } finally {
+        autoplayInFlightRef.current = false;
       }
     };
 
@@ -510,10 +692,21 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener(PORTFOLIO_READY_EVENT, onPortfolioReady);
     const fallbackAutoplay = window.setTimeout(() => scheduleAutoplay(), 2800);
 
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!autoplaySuccessRef.current) scheduleAutoplay();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    scheduleAutoplay();
+
     return () => {
       autoplaySuccessRef.current = false;
       autoplayMicrotaskQueuedRef.current = false;
+      autoplayInFlightRef.current = false;
+      useWebAudioRef.current = false;
       window.removeEventListener(PORTFOLIO_READY_EVENT, onPortfolioReady);
+      document.removeEventListener('visibilitychange', onVisibility);
       window.clearTimeout(fallbackAutoplay);
       engineRef.current.clearTransitionTimers();
       transitionGenRef.current += 1;
@@ -542,6 +735,38 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const togglePlay = useCallback(() => {
     const active = getActiveDeck();
     if (!active) return;
+
+    if (!useWebAudioRef.current) {
+      if (isPlayingRef.current) {
+        const startVol = active.audio.volume;
+        const t0 = performance.now();
+        const tick = () => {
+          const elapsed = performance.now() - t0;
+          const p = Math.min(1, elapsed / FADE_OUT_MS);
+          active.audio.volume = startVol * (1 - p);
+          if (p < 1) requestAnimationFrame(tick);
+          else {
+            active.audio.pause();
+            setIsPlaying(false);
+          }
+        };
+        requestAnimationFrame(tick);
+      } else {
+        active.audio.volume = 0;
+        void active.audio
+          .play()
+          .then(() => {
+            rampElementVolume(active.audio, 0, volumeRef.current, FADE_IN_MS);
+            setIsPlaying(true);
+          })
+          .catch(() => {
+            setRequiresUserGesture(true);
+            setIsPlaying(false);
+          });
+      }
+      return;
+    }
+
     ensureDeckGraph(active);
     if (!active.gainNode) return;
 
@@ -582,9 +807,16 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       setVolumeState(clamped);
       volumeRef.current = clamped;
       restoreVolumeRef.current = clamped;
+      if (!useWebAudioRef.current) {
+        const active = getActiveDeck();
+        if (active && isPlayingRef.current) {
+          active.audio.volume = clamped;
+        }
+        return;
+      }
       scheduleMasterVolume(clamped, VOLUME_RAMP_MS);
     },
-    [scheduleMasterVolume],
+    [getActiveDeck, scheduleMasterVolume],
   );
 
   const seekTo = useCallback(
@@ -626,21 +858,58 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     [performTransition, togglePlay],
   );
 
-  const handleAutoResumeByInteraction = useCallback(() => {
-    if (!requiresUserGesture) return;
-    void resumeAudio()
-      .then(() => {
+  const unlockFromUserGesture = useCallback(() => {
+    const continueWithWebAudio = () =>
+      resumeAudio().then(() => {
         const active = getActiveDeck();
-        if (!active || !active.gainNode) return;
+        if (!active?.gainNode) return undefined;
+
+        const ctx = audioContextRef.current;
+        const needPlay =
+          !autoplaySuccessRef.current ||
+          active.audio.paused ||
+          ctx == null ||
+          ctx.state !== 'running';
+
+        if (!needPlay) {
+          setRequiresUserGesture(false);
+          return undefined;
+        }
+
         return playDeck(active).then(() => {
           scheduleMasterVolume(restoreVolumeRef.current, VOLUME_RAMP_MS);
           deckGainFadeIn(active.gainNode!, FADE_IN_MS);
           setIsPlaying(true);
           setRequiresUserGesture(false);
+          autoplaySuccessRef.current = true;
         });
-      })
-      .catch(() => setRequiresUserGesture(true));
-  }, [deckGainFadeIn, getActiveDeck, playDeck, requiresUserGesture, resumeAudio, scheduleMasterVolume]);
+      });
+
+    if (!useWebAudioRef.current) {
+      void migrateToWebAudioFromGesture()
+        .then(() => continueWithWebAudio())
+        .catch(() => setRequiresUserGesture(true));
+    } else {
+      void continueWithWebAudio().catch(() => setRequiresUserGesture(true));
+    }
+  }, [
+    deckGainFadeIn,
+    getActiveDeck,
+    migrateToWebAudioFromGesture,
+    playDeck,
+    resumeAudio,
+    scheduleMasterVolume,
+  ]);
+
+  const handleAutoResumeByInteraction = useCallback(() => {
+    const active = getActiveDeck();
+    const stuckPlayingUi =
+      isPlayingRef.current && active != null && active.audio.paused;
+    if (!requiresUserGesture && !stuckPlayingUi) {
+      return;
+    }
+    unlockFromUserGesture();
+  }, [getActiveDeck, requiresUserGesture, unlockFromUserGesture]);
 
   useEffect(() => {
     const onInteract = () => handleAutoResumeByInteraction();
@@ -704,6 +973,7 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         playTrack,
         requiresUserGesture,
         resumeAudio,
+        unlockFromUserGesture,
       }}
     >
       {children}

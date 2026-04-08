@@ -16,7 +16,7 @@ import Footer from '@/sections/Footer';
 // Loading Screen Component
 function LoadingScreen({ onComplete }: { onComplete: () => void }) {
   const [progress, setProgress] = useState(0);
-  const thinkingDots = useTypingEffect(['...'], 220, 160);
+  const thinkingDots = useTypingEffect(['...'], 120, 80);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -72,7 +72,7 @@ function LoadingScreen({ onComplete }: { onComplete: () => void }) {
         transition={{ delay: 0.3 }}
       >
         thinking{' '}
-        <span aria-hidden="true">{thinkingDots}</span>
+        <span aria-hidden="true">{thinkingDots || "..."}</span>
       </motion.p>
 
       {/* Code Particles */}
