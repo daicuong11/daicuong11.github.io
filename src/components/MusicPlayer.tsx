@@ -172,7 +172,6 @@ function MusicModal({ onClose }: { onClose: () => void }) {
     playTrack,
     requiresUserGesture,
     resumeAudio,
-    prefetchTrackMedia,
   } = useMusic();
   const { t } = useTranslation();
 
@@ -197,12 +196,6 @@ function MusicModal({ onClose }: { onClose: () => void }) {
       playlistEl.removeEventListener('wheel', preventScroll);
     };
   }, [showPlaylist]);
-
-  useEffect(() => {
-    for (const t of playlist) {
-      prefetchTrackMedia(t.id);
-    }
-  }, [playlist, prefetchTrackMedia]);
 
   // Handle progress bar click/drag
   const effectiveDuration =
@@ -269,17 +262,6 @@ function MusicModal({ onClose }: { onClose: () => void }) {
   const handleTrackSelect = (trackId: string) => {
     playTrack(trackId);
   };
-
-  const prefetchNeighborOnHover = useCallback(
-    (delta: -1 | 1) => {
-      const i = playlist.findIndex((t) => t.id === currentTrack.id);
-      if (i === -1) return;
-      const n = playlist.length;
-      const j = (i + delta + n) % n;
-      prefetchTrackMedia(playlist[j].id);
-    },
-    [playlist, currentTrack.id, prefetchTrackMedia],
-  );
 
   const handleEnableAudioClick = useCallback(async () => {
     await resumeAudio();
@@ -481,7 +463,6 @@ function MusicModal({ onClose }: { onClose: () => void }) {
             {/* Previous */}
             <motion.button
               onClick={prevTrack}
-              onPointerEnter={() => prefetchNeighborOnHover(-1)}
               className="p-2.5 sm:p-3 rounded-full text-foreground hover:bg-foreground/10 transition-colors"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
@@ -509,7 +490,6 @@ function MusicModal({ onClose }: { onClose: () => void }) {
             {/* Next */}
             <motion.button
               onClick={nextTrack}
-              onPointerEnter={() => prefetchNeighborOnHover(1)}
               className="p-2.5 sm:p-3 rounded-full text-foreground hover:bg-foreground/10 transition-colors"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
@@ -608,8 +588,6 @@ function MusicModal({ onClose }: { onClose: () => void }) {
                         <motion.button
                           type="button"
                           onClick={() => handleTrackSelect(track.id)}
-                          onPointerEnter={() => prefetchTrackMedia(track.id)}
-                          onFocus={() => prefetchTrackMedia(track.id)}
                           className={`grid w-full grid-cols-[1.75rem_2.75rem_1fr_auto] items-center gap-x-3 rounded-xl px-2 py-2 text-left transition-colors sm:grid-cols-[2rem_3rem_1fr_auto] sm:px-2.5 sm:py-2.5 ${
                             isCurrentTrack
                               ? 'bg-primary/18 ring-1 ring-primary/35'

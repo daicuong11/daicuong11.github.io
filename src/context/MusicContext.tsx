@@ -24,8 +24,6 @@ interface MusicContextType {
   resumeAudio: () => Promise<void>;
   /** Gọi từ gesture (vd. chạm màn hình loading) để mở AudioContext / bật tiếng sau autoplay muted */
   unlockFromUserGesture: () => void;
-  /** Làm nóng cache /music/*.mp3 (hover playlist, mở danh sách) để đổi bài mượt hơn */
-  prefetchTrackMedia: (trackId: string) => void;
 }
 
 /** Bài mặc định khi mở app (id trong playlist, ví dụ '3' → index 2) */
@@ -77,41 +75,6 @@ function waitForCanPlay(audio: HTMLAudioElement): Promise<void> {
     audio.addEventListener('canplay', onCanPlay, { once: true });
     audio.addEventListener('error', onError, { once: true });
   });
-}
-
-/** GET đầy đủ MP3 vào HTTP cache — khi đổi bài, audio.load() thường hit cache, bớt trễ */
-const warmedPlaylistMediaKeys = new Set<string>();
-
-function playlistMediaCacheKey(url: string): string {
-  try {
-    return new URL(url, window.location.href).href;
-  } catch {
-    return url;
-  }
-}
-
-function warmPlaylistMediaUrl(url: string): void {
-  if (typeof window === 'undefined') return;
-  const key = playlistMediaCacheKey(url);
-  if (warmedPlaylistMediaKeys.has(key)) return;
-  warmedPlaylistMediaKeys.add(key);
-  void fetch(url, { credentials: 'same-origin' }).catch(() => {
-    warmedPlaylistMediaKeys.delete(key);
-  });
-}
-
-function scheduleWarmEntirePlaylistMedia(): void {
-  const run = () => {
-    for (const t of playlist) {
-      warmPlaylistMediaUrl(t.url);
-    }
-  };
-  const ric = window.requestIdleCallback;
-  if (typeof ric === 'function') {
-    ric(run, { timeout: 4500 });
-  } else {
-    window.setTimeout(run, 400);
-  }
 }
 
 /**
@@ -736,7 +699,6 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener('visibilitychange', onVisibility);
 
     scheduleAutoplay();
-    scheduleWarmEntirePlaylistMedia();
 
     return () => {
       autoplaySuccessRef.current = false;
@@ -896,11 +858,6 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     [performTransition, togglePlay],
   );
 
-  const prefetchTrackMedia = useCallback((trackId: string) => {
-    const tr = playlist.find((t) => t.id === trackId);
-    if (tr) warmPlaylistMediaUrl(tr.url);
-  }, []);
-
   const unlockFromUserGesture = useCallback(() => {
     const continueWithWebAudio = () =>
       resumeAudio().then(() => {
@@ -1017,7 +974,6 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         requiresUserGesture,
         resumeAudio,
         unlockFromUserGesture,
-        prefetchTrackMedia,
       }}
     >
       {children}
