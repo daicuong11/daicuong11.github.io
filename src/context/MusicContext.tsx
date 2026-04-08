@@ -83,7 +83,8 @@ function waitForCanPlay(audio: HTMLAudioElement): Promise<void> {
  */
 async function loadTrackOnDeck(deck: Deck, trackIndex: number): Promise<void> {
   const url = playlist[trackIndex].url;
-  if (deck.trackIndex === trackIndex && trackUrlMatchesAudio(deck.audio, url)) {
+  const sameUrl = deck.trackIndex === trackIndex && trackUrlMatchesAudio(deck.audio, url);
+  if (sameUrl && deck.audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
     return;
   }
 
@@ -552,15 +553,18 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     isTransitioningRef.current = false;
 
-    const audioA = new Audio(playlist[FAVORITE_TRACK_INDEX].url);
-    audioA.loop = false;
+    const audioA = new Audio();
     audioA.preload = 'auto';
+    audioA.loop = false;
     audioA.setAttribute('playsinline', '');
+    audioA.src = playlist[FAVORITE_TRACK_INDEX].url;
 
-    const audioB = new Audio(playlist[(FAVORITE_TRACK_INDEX + 1) % playlist.length].url);
+    /** Deck phụ: chỉ gán src, không load — tránh tải song song bài tiếp theo khi mở trang (GitHub Pages chậm). */
+    const audioB = new Audio();
+    audioB.preload = 'none';
     audioB.loop = false;
-    audioB.preload = 'auto';
     audioB.setAttribute('playsinline', '');
+    audioB.src = playlist[(FAVORITE_TRACK_INDEX + 1) % playlist.length].url;
 
     const deckA: Deck = {
       id: 'A',
@@ -631,7 +635,13 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         setIsPlaying(true);
         autoplaySuccessRef.current = true;
         setRequiresUserGesture(false);
-        eng.preloadNextOnInactive(FAVORITE_TRACK_INDEX);
+        const schedulePreloadNext = () => eng.preloadNextOnInactive(FAVORITE_TRACK_INDEX);
+        const ric = window.requestIdleCallback;
+        if (typeof ric === 'function') {
+          ric(schedulePreloadNext, { timeout: 4000 });
+        } else {
+          window.setTimeout(schedulePreloadNext, 2000);
+        }
         eng.syncUiFromActiveAudio();
       };
 
@@ -921,35 +931,90 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     };
   }, [handleAutoResumeByInteraction]);
 
-  /** Đọc duration từ metadata cho mọi bài (playlist), không ảnh hưởng deck đang phát */
+  /**
+   * Sau khi trang đã tương tác xong, lấy duration thật từng bài một (metadata nhẹ) khi rảnh —
+   * không chặn LCP / tải bài đầu. UI vẫn dùng `track.duration` trong playlist cho đến khi có meta.
+   */
   useEffect(() => {
     let cancelled = false;
-    const cleanups: (() => void)[] = [];
+    const fav = FAVORITE_TRACK_INDEX;
+    const skipNext = (fav + 1) % playlist.length;
+    const pending = playlist
+      .map((t, i) => ({ id: t.id, i }))
+      .filter(({ i }) => i !== fav && i !== skipNext)
+      .map(({ id }) => id);
 
-    for (const track of playlist) {
+    const scheduleAnother = () => {
+      const ric = window.requestIdleCallback;
+      if (typeof ric === 'function') {
+        ric(runNext, { timeout: 8000 });
+      } else {
+        window.setTimeout(runNext, 1200);
+      }
+    };
+
+    const runNext = () => {
+      if (cancelled || pending.length === 0) return;
+      const id = pending.shift();
+      if (!id) return;
+      const track = playlist.find((t) => t.id === id);
+      if (!track) {
+        runNext();
+        return;
+      }
       const a = document.createElement('audio');
       a.preload = 'metadata';
       a.muted = true;
+      const cleanup = () => {
+        a.removeEventListener('loadedmetadata', onLoaded);
+        a.removeAttribute('src');
+        try {
+          a.load();
+        } catch {
+          /* ignore */
+        }
+      };
       const onLoaded = () => {
         if (cancelled) return;
         const d = a.duration;
         if (Number.isFinite(d) && d > 0 && d !== Number.POSITIVE_INFINITY) {
           setTrackMetaDurations((prev) => mergeMetaDuration(prev, track.id, d));
         }
+        cleanup();
+        scheduleAnother();
       };
       a.addEventListener('loadedmetadata', onLoaded);
+      a.addEventListener(
+        'error',
+        () => {
+          if (cancelled) return;
+          cleanup();
+          scheduleAnother();
+        },
+        { once: true },
+      );
       a.src = track.url;
       a.load();
-      cleanups.push(() => {
-        a.removeEventListener('loadedmetadata', onLoaded);
-        a.removeAttribute('src');
-        a.load();
-      });
+    };
+
+    const kickoff = () => {
+      if (cancelled) return;
+      const ric = window.requestIdleCallback;
+      if (typeof ric === 'function') {
+        ric(runNext, { timeout: 10000 });
+      } else {
+        window.setTimeout(runNext, 3000);
+      }
+    };
+
+    if (document.readyState === 'complete') {
+      window.setTimeout(kickoff, 1500);
+    } else {
+      window.addEventListener('load', () => window.setTimeout(kickoff, 1500), { once: true });
     }
 
     return () => {
       cancelled = true;
-      for (const c of cleanups) c();
     };
   }, []);
 
